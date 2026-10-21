@@ -1,0 +1,30 @@
+# Core
+numpy>=1.26
+pandas>=2.1
+scikit-learn>=1.4
+pyyaml>=6.0
+
+# Lab (tabular) branch
+xgboost>=2.0
+lightgbm>=4.3
+tabicl>=2.0          # deep tabular model (BSD-3-Clause)
+shap>=0.45
+
+# ECG (image) branch -- PyTorch
+torch>=2.2
+torchvision>=0.17
+timm>=1.0
+pillow>=10.0
+opencv-python-headless>=4.9
+imagehash>=4.3       # near-duplicate image detection
+grad-cam>=1.5        # Grad-CAM explanations (pytorch-grad-cam)
+
+# App + reporting
+streamlit>=1.35
+matplotlib>=3.8
+
+# Dev
+pytest>=8.0
+jupyter>=1.0
+
+# Once versions are settled, pin exact versions with:  pip freeze > requirements.lock

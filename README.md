@@ -2,22 +2,81 @@
 
 A hybrid machine-learning + deep-learning model for coronary artery disease (CAD) / cardiovascular disease (CVD) risk, built only on South Asian data (India, Pakistan, Bangladesh).
 
+> Research prototype. Not for clinical use.
+
 ## Approach
 
 The model has two branches that are trained separately and combined at the end:
 
-- **Lab branch (tabular):** gradient boosting (XGBoost / LightGBM) and a deep tabular model, stacked together. Explained with SHAP.
-- **ECG branch (images):** an ImageNet-pretrained CNN fine-tuned on paper ECG images, with its learned features fed into a gradient-boosting / SVM classifier. Explained with Grad-CAM.
+- **Lab branch (tabular):** gradient boosting (XGBoost / LightGBM) and a deep tabular model (TabICL), stacked together. Explained with SHAP.
+- **ECG branch (images):** an ImageNet-pretrained CNN (PyTorch / timm) fine-tuned on paper ECG images, with its learned features fed into an XGBoost / SVM classifier. Explained with Grad-CAM.
 - **Fusion:** each branch is calibrated, then the two are combined. The model works with lab values only, an ECG only, or both.
 
 The two branches use different patients (no public South Asian dataset has both labs and ECGs for the same person), so they can't be trained as one network.
 
 ## Data rule
 
-Only Indian, Pakistani or Bangladeshi datasets are used for training and evaluation. Raw data, processed data and trained model files are never committed to this repository.
+Only Indian, Pakistani or Bangladeshi datasets are used for training and evaluation. Raw data, processed data and trained model files are never committed to this repository. See [`data/README.md`](data/README.md) for where each dataset comes from and [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) for CC BY 4.0 credits.
+
+## Repository layout
+
+```
+configs/            model and data settings (features, label maps, fusion weights)
+data/               NOT committed except README + data_register.csv
+  raw/              original downloads, one folder per dataset
+  interim/          cleaned, de-duplicated
+  processed/        final splits
+src/cad_hybrid/
+  data/             loaders, near-duplicate check, patient-level splits   (shared)
+  tabular/          lab branch: baselines, deep tabular, stacking         (Person A)
+  ecg/              ECG branch: preprocessing, CNN, embeddings -> GBM     (Person B)
+  fusion/           calibration and late fusion                           (shared)
+  evaluation/       metrics with bootstrap CIs, cross-country tests       (shared)
+  explain/          SHAP (labs), Grad-CAM (ECG)
+  predict.py        single prediction interface used everywhere
+scripts/            train_tabular.py, train_ecg.py, evaluate.py
+notebooks/          data audits and exploration only
+app/                internal Streamlit test app
+models/             trained weights, NOT committed
+reports/            model card and figures
+tests/              unit tests
+```
+
+## Setup
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+pip install -e .                 # makes `import cad_hybrid` work everywhere
+pytest                           # run the tests
+```
+
+Then download the datasets into `data/raw/` as described in `data/README.md`.
+
+## Common commands
+
+```bash
+python scripts/train_tabular.py --config configs/tabular.yaml
+python scripts/train_ecg.py --config configs/ecg.yaml
+python scripts/evaluate.py
+streamlit run app/streamlit_app.py
+```
+
+## Workflow
+
+- `main` stays working; don't commit to it directly.
+- Create a branch per task, e.g. `tabular/xgboost-baseline` or `ecg/two-stage-finetune`.
+- Open a pull request; the other person reviews before merging.
+- Keep exploration in `notebooks/`; move code you keep into `src/cad_hybrid/` with a test.
+- Never commit data, model weights or secrets (the `.gitignore` blocks the common cases).
 
 ## Status
 
-Project setup. See open pull requests for the initial structure.
-
-> Research prototype. Not for clinical use.
+| Part | State |
+|---|---|
+| Project structure, fusion, metrics, splits, near-duplicate check | Done (with tests) |
+| Data audit | Next (week 1) |
+| Lab branch | Stubs |
+| ECG branch | Stubs |
+| Streamlit test app | Skeleton |

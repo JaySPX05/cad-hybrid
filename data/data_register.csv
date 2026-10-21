@@ -1,0 +1,8 @@
+dataset_id,name,country,type,source_url,licence_or_agreement,commercial_use_allowed,attribution_required,date_obtained,evidence_location,status,notes
+mendeley_india_cvd,Cardiovascular_Disease_Dataset,India,tabular,https://doi.org/10.17632/dzz48mvjht.1,CC BY 4.0,yes,yes,,,to_download,1000 patients; hospital unnamed; confirm features and target after download
+bangladesh_cardiac,Cardiac patients from Northern Bangladesh,Bangladesh,tabular,https://data.mendeley.com/datasets/vf6yrn2jjt/1,CC BY 4.0,yes,yes,,,to_download,Contents and size to verify
+ecg_multan_pk,ECG Images dataset of Cardiac Patients,Pakistan,ecg_images,https://data.mendeley.com/datasets/gwbz3fsgp8/2,CC BY 4.0,yes,yes,,,to_download,929 images: MI 240; history of MI 172; abnormal heartbeat 233; normal 284
+ecg_bhopal_in,ECG Image Dataset for Myocardial Infarction Complication,India,ecg_images,https://data.mendeley.com/datasets/5dhyd9t26m/2,CC BY 4.0,yes,yes,,,to_download,Size and classes to verify
+carrs,CARRS (GHCoE New Delhi),India; Pakistan,tabular,https://biolincc.nhlbi.nih.gov/studies/ghcoe_new_delhi,BioLINCC RMDA,check_agreement,per_agreement,,,to_request,Needs ethics letter + company PI and signatory
+south_asia_biobank,South Asia Biobank,Bangladesh; India; Pakistan; Sri Lanka,tabular+retinal,https://www.ghru-southasia.org/,Data Access Committee,unknown,per_agreement,,,to_request,Filter out Sri Lanka; confirm lab tests; ECG and CVD labels
+icadd,Indian Coronary Artery Disease Dataset,India,imaging+reports,https://www.medrxiv.org/content/10.1101/2023.05.13.23289934,Author agreement,unknown,per_agreement,,,to_request,70 patients
