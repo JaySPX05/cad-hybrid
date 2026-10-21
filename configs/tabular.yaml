@@ -1,0 +1,44 @@
+# Lab (tabular) branch configuration.
+# Feature names and the target column are placeholders until the data audit (week 1)
+# confirms what each dataset actually contains.
+
+seed: 42
+
+data:
+  train_sources:
+    - mendeley_india_cvd
+  external_test_sources:
+    - bangladesh_cardiac        # India -> Bangladesh cross-country test
+  target: TODO_target_column    # confirm meaning after download (CAD vs general CVD)
+  positive_label: 1
+  features:
+    numeric: []                 # e.g. age, systolic_bp, total_cholesterol, ...
+    categorical: []             # e.g. sex, smoking, diabetes, ...
+  # Clinically plausible ranges; values outside are flagged/clipped during cleaning.
+  plausible_ranges: {}
+
+split:
+  test_size: 0.2
+  stratify: true
+  cv_folds: 5
+  cv_repeats: 3
+
+models:
+  logistic_regression:
+    C: 1.0
+    max_iter: 1000
+  xgboost:
+    n_estimators: 400
+    max_depth: 4
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+  lightgbm:
+    n_estimators: 400
+    num_leaves: 15
+    learning_rate: 0.05
+  tabicl:
+    enabled: true
+    finetune: false
+  stack:
+    meta_model: logistic_regression

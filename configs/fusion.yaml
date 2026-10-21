@@ -1,0 +1,17 @@
+# Fusion configuration.
+# Weights are hand-set until we have patients with BOTH lab values and an ECG,
+# which is needed to learn them.
+
+calibration:
+  method: isotonic              # or: platt (sigmoid); use platt for very small sets
+
+prior_probability: 0.30         # TODO: set from the training data's positive rate
+
+branch_weights:
+  tabular: 1.0
+  ecg: 1.0
+
+risk_categories:                # thresholds on the fused probability
+  low: [0.0, 0.10]
+  moderate: [0.10, 0.20]
+  high: [0.20, 1.0]
