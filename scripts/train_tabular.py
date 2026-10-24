@@ -15,12 +15,18 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+from cad_hybrid.tabular.stack import make_stack
 
 import numpy as np
 from sklearn.base import clone
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 from cad_hybrid.evaluation.metrics import bootstrap_ci
+
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import make_pipeline
+
+from cad_hybrid.tabular.deep_tabular import tabicl_model
 
 METRICS = ["auroc", "auprc", "brier", "sensitivity", "specificity"]
 
@@ -82,15 +88,27 @@ def out_of_fold_predictions(model, X, y, n_splits: int, n_repeats: int, seed: in
 
 def build_models(config: dict, numeric: list[str] | None = None,
                  categorical: list[str] | None = None) -> dict:
-    """Create the two baseline models. Uses the config's features unless a subset is given."""
+    """Create the lab-branch models (baselines, TabICL and the stack, as enabled in the config)."""
     features = config["data"]["features"]
     numeric = features["numeric"] if numeric is None else numeric
     categorical = features["categorical"] if categorical is None else categorical
     params = config["models"]
-    return {
+    models = {
         "logistic_regression": logistic_regression(numeric, categorical, **params["logistic_regression"]),
         "xgboost": xgboost_model(random_state=config["seed"], **params["xgboost"]),
     }
+    if params["tabicl"]["enabled"]:
+        models["tabicl"] = make_pipeline(
+            SimpleImputer(strategy="median"),
+            tabicl_model(finetune=params["tabicl"]["finetune"]),
+        )
+    stack_cfg = params["stack"]
+    if stack_cfg.get("enabled", False) and "tabicl" in models:
+        models["stack_xgb_tabicl"] = make_stack(
+            {"xgboost": models["xgboost"], "tabicl": models["tabicl"]},
+            cv=stack_cfg.get("inner_cv", 3),
+        )
+    return models
 
 def pipeline_check(config: dict) -> None:
     """Train on the main dataset with shared features only; predict the pipeline-test dataset."""

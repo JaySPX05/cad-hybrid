@@ -94,4 +94,6 @@ models:
     enabled: true
     finetune: false
   stack:
+    enabled: true
     meta_model: logistic_regression
+    inner_cv: 3

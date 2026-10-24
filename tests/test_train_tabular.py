@@ -2,6 +2,7 @@
 
 import importlib.util
 from pathlib import Path
+import yaml
 
 import numpy as np
 import pandas as pd
@@ -45,3 +46,24 @@ def test_save_results_writes_csv_and_markdown(tmp_path):
     assert len(pd.read_csv(csv_path)) == len(train_tabular.METRICS)
     text = md_path.read_text(encoding="utf-8")
     assert "| model_a |" in text and "overstate" in text
+
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "configs" / "tabular.yaml"
+
+
+def load_config() -> dict:
+    with open(CONFIG_PATH) as f:
+        return yaml.safe_load(f)
+
+
+def test_build_models_without_tabicl():
+    config = load_config()
+    config["models"]["tabicl"]["enabled"] = False
+    assert set(train_tabular.build_models(config)) == {"logistic_regression", "xgboost"}
+
+
+def test_build_models_with_tabicl_adds_stack():
+    config = load_config()
+    config["models"]["tabicl"]["enabled"] = True
+    config["models"]["stack"]["enabled"] = True
+    assert set(train_tabular.build_models(config)) == {
+        "logistic_regression", "xgboost", "tabicl", "stack_xgb_tabicl"}
