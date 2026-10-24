@@ -30,6 +30,8 @@
 | Typos: "\`2.6", "4,3", "106,4", "106. 8" | Parsed to numbers |
 | BMI disagrees with height/weight in ~9% of rows | Recomputed where height and weight exist |
 | Values outside plausible ranges | Set to missing (ranges in `configs/tabular.yaml`) |
+| Missing creatinine occurs only in disease-positive patients (0% vs 6.7% missing); XGBoost learned "blank creatinine → disease" (found 24 Oct 2026) | All models impute (median) before fitting, so missingness can't be used as a signal |
+| Training patients almost always have full panels (97% have ≤ 4 of 19 values missing); mostly-blank inputs scored ~0.84–0.999 regardless of values | `predict_tabular()` refuses patients with more than 4 blank fields (`final.max_missing_features`) |
 
 Even after cleaning, CV AUROC ~0.99; lipids alone 0.95; LDL alone 0.89 within the General unit (median 94 vs 150 mg/dL). Separation is much stronger than in real populations, likely selection (very sick vs relatively healthy hospital patients). **Scores on this data will overstate real-world performance.**
 

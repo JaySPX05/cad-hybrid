@@ -61,6 +61,13 @@ def test_build_models_without_tabicl():
     assert set(train_tabular.build_models(config)) == {"logistic_regression", "xgboost"}
 
 
+def test_xgboost_imputes_so_missingness_is_not_a_signal():
+    config = load_config()
+    config["models"]["tabicl"]["enabled"] = False
+    xgb = train_tabular.build_models(config)["xgboost"]
+    assert type(xgb.steps[0][1]).__name__ == "SimpleImputer"
+
+
 def test_build_models_with_tabicl_adds_stack():
     config = load_config()
     config["models"]["tabicl"]["enabled"] = True

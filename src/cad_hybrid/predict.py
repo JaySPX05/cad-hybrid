@@ -13,6 +13,8 @@ from pathlib import Path
 import yaml
 
 from .fusion.fuse import fuse, risk_category
+from .tabular.artifact import DEFAULT_PATH as TABULAR_MODEL_PATH
+from .tabular.artifact import check_completeness, load_artifact, predict_calibrated, to_frame
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
 
@@ -29,12 +31,20 @@ def load_config(name: str) -> dict:
         return yaml.safe_load(f)
 
 
-def predict_tabular(lab_values: dict) -> float:
-    """Calibrated CAD probability from lab values.
+def predict_tabular(lab_values: dict, model_path: Path | str = TABULAR_MODEL_PATH) -> float:
+    """Calibrated probability of heart disease from one patient's lab values.
 
-    TODO: load the trained lab model + calibrator from ``models/`` and score.
+    ``lab_values`` uses the shared-schema names from ``configs/tabular.yaml``
+    (e.g. ``{"age": 54, "sex_male": 1, "ldl": 150}``). Any field may be left out;
+    missing values are handled by the model. Unknown field names raise ValueError.
+
+    The model is trained by ``scripts/train_tabular.py`` and saved to
+    ``models/tabular/lab_model.joblib``; FileNotFoundError if it hasn't been trained.
     """
-    raise NotImplementedError("Lab model not trained yet")
+    artifact = load_artifact(str(model_path))
+    X = to_frame(lab_values, artifact["features"])
+    check_completeness(artifact, X)  # ValueError if too many fields are blank
+    return float(predict_calibrated(artifact, X)[0])
 
 
 def predict_ecg(image_path: str) -> float:

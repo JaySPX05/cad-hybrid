@@ -97,3 +97,16 @@ models:
     enabled: true
     meta_model: logistic_regression
     inner_cv: 3
+
+# The model trained on all patients and saved for predict_tabular().
+# Calibration is fitted on the cross-validation (held-out) predictions, never on the
+# training fit. Override the model from the command line with --final-model.
+final:
+  model: stack_xgb_tabicl         # see reports/baseline_results_tabular.md; revisit with CARRS
+  calibration: platt              # platt suits ~1,000 patients; isotonic needs more data
+  threshold: 0.5                  # placeholder until the threshold task
+  # predict_tabular() refuses patients with more blank fields than this (out of 19).
+  # 97% of training patients had <= 4 missing; mostly-blank inputs are outside what the
+  # model has seen and give unreliable scores.
+  max_missing_features: 4
+  output_path: models/tabular/lab_model.joblib   # gitignored
