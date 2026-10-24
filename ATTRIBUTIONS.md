@@ -8,9 +8,9 @@ Fill in the author names exactly as shown on each dataset page, and keep the dat
 
 | Dataset | Creators | Source | Licence | Changes we made |
 |---|---|---|---|---|
-| Cardiovascular_Disease_Dataset (India) | _TODO: authors from dataset page_ | Mendeley Data, https://doi.org/10.17632/dzz48mvjht.1 | CC BY 4.0 | Columns renamed; cholesterol 0 and undocumented slope 0 set to missing; chest pain type mapped to yes/no. Used for pipeline testing only. |
-| Clinical, anthropometric and biochemical parameters in cardiac patients from Northern Bangladesh (Zia Heart Foundation Hospital) | _TODO: authors from dataset page_ | Mendeley Data, https://data.mendeley.com/datasets/vf6yrn2jjt/1 | CC BY 4.0 | Columns renamed; typos parsed; BMI recomputed; out-of-range values set to missing; under-18s removed; UNIT, Troponin-I and MaxHR excluded. |
-| ECG Images dataset of Cardiac Patients (Pakistan) | _TODO_ | Mendeley Data, https://data.mendeley.com/datasets/gwbz3fsgp8/2 | CC BY 4.0 | _TODO: e.g. cropped, resized, labels merged into CAD-positive/negative_ |
-| ECG Image Dataset for Myocardial Infarction Complication (India) | _TODO_ | Mendeley Data, https://data.mendeley.com/datasets/5dhyd9t26m/2 | CC BY 4.0 | _TODO_ |
+| Cardiovascular_Disease_Dataset (India) | Bhanu Prakash Doppala, Debnath Bhattacharyya (2021) | Mendeley Data, V1, https://doi.org/10.17632/dzz48mvjht.1 | CC BY 4.0 | Columns renamed; cholesterol 0 and undocumented slope 0 set to missing; chest pain type mapped to yes/no. Used for pipeline testing only. |
+| Dataset of clinical, anthropometric, and biochemical parameters in cardiac patients from Northern Bangladesh (Zia Heart Foundation Hospital & Research Institute) | Md Sohanur Rahman Hridoy, Amit Hasan Sikder, Md Ashikur Arman Arman (2026) | Mendeley Data, V1, https://doi.org/10.17632/vf6yrn2jjt.1 | CC BY 4.0 | Columns renamed; typos parsed; BMI recomputed; out-of-range values set to missing; under-18s removed; UNIT, Troponin-I and MaxHR excluded. |
+| ECG Images dataset of Cardiac Patients (Ch. Pervaiz Elahi Institute of Cardiology, Multan, Pakistan) | Ali Haider Khan, Muzammil Hussain (2021) | Mendeley Data, V2, https://doi.org/10.17632/gwbz3fsgp8.2 | CC BY 4.0 | _TODO: e.g. cropped, resized, labels merged into CAD-positive/negative_ |
+| ECG Image dataset for Myocardial Infarction Complication (India) | Jay Prakash Maurya, Vinesh Kumar, Vijay Kumar Trivedi (2025) | Mendeley Data, V2, https://doi.org/10.17632/5dhyd9t26m.2 | CC BY 4.0 | _TODO_ |
 
 Datasets obtained under data-use agreements (e.g. CARRS via BioLINCC, South Asia Biobank) are governed by those agreements, not CC BY. Record their terms in `data/data_register.csv`.

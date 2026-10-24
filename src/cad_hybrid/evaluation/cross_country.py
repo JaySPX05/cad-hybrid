@@ -3,7 +3,9 @@
 Train on one country's data and test on another's to check the model learned heart
 patterns rather than one hospital's quirks:
 - ECG branch: Pakistan (Multan) -> India (Bhopal)
-- Lab branch: India (Mendeley) -> Bangladesh
+- Lab branch: Bangladesh -> India (Mendeley), shared features only. The India data failed
+  the audit, so this is a pipeline check, not evidence of transfer (see
+  reports/data_audit_tabular.md). Use CARRS / South Asia Biobank once approved.
 A large drop from internal to external performance is a warning sign.
 """
 

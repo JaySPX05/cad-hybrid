@@ -12,7 +12,6 @@ data:
   pipeline_test_sources:
     - mendeley_india_cvd        # use only to check code runs end to end
   target: heart_disease         # shared-schema name, 1 = present, 0 = absent
-  positive_label: 1
   min_age: 18                   # adults only (Bangladesh data includes ages 4-97)
 
   # Features used to train the main (Bangladesh) model, in shared-schema names.
@@ -70,9 +69,9 @@ data:
     max_heart_rate: [40, 230]
     oldpeak: [0, 10]
 
+# Evaluation is repeated stratified cross-validation; there is no separate test split
+# (too few patients). External validation will use CARRS / South Asia Biobank.
 split:
-  test_size: 0.2
-  stratify: true
   cv_folds: 5
   cv_repeats: 3
 
@@ -86,7 +85,7 @@ models:
     learning_rate: 0.05
     subsample: 0.8
     colsample_bytree: 0.8
-  lightgbm:
+  lightgbm:                     # not used yet (build_models doesn't include it)
     n_estimators: 400
     num_leaves: 15
     learning_rate: 0.05
@@ -95,8 +94,7 @@ models:
     finetune: false
   stack:
     enabled: true
-    meta_model: logistic_regression
-    inner_cv: 3
+    inner_cv: 3                 # meta-model is logistic regression (tabular/stack.py)
 
 # The model trained on all patients and saved for predict_tabular().
 # Calibration is fitted on the cross-validation (held-out) predictions, never on the

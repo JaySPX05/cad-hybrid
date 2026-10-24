@@ -33,7 +33,11 @@ def logistic_regression(numeric: list[str], categorical: list[str], **params) ->
 
 
 def xgboost_model(**params):
-    """XGBoost classifier (handles missing values natively; no scaling needed)."""
+    """XGBoost classifier (no scaling needed).
+
+    XGBoost can handle missing values itself, but the lab branch imputes first
+    (see build_models in scripts/train_tabular.py) so missingness can't act as a signal.
+    """
     from xgboost import XGBClassifier
 
     return XGBClassifier(eval_metric="logloss", **params)
