@@ -1,7 +1,7 @@
 # Lab branch: model results
 
 Dataset: `bangladesh_cardiac` (1035 patients). Run date: 2026-10-24.
-Held-out predictions from repeated stratified 5-fold CV (3 repeats), 95% bootstrap confidence intervals, threshold 0.5.
+Held-out predictions from repeated stratified 5-fold CV (3 repeats), 95% bootstrap confidence intervals. Sensitivity and specificity at threshold 0.5 for comparison; the final model's threshold is in `reports/threshold_tabular.md`.
 
 | Model | auroc | auprc | brier | sensitivity | specificity |
 |---|---|---|---|---|---|
