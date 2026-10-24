@@ -1,21 +1,74 @@
 # Lab (tabular) branch configuration.
-# Feature names and the target column are placeholders until the data audit (week 1)
-# confirms what each dataset actually contains.
+# Decisions from the data audit (reports/data_audit_tabular.md, 24 Oct 2026):
+# - Bangladesh dataset = main training set (cleaned).
+# - India (Mendeley) dataset = pipeline testing only; red flags make it unreliable for training.
+# - Both targets mean "heart disease present", not CAD specifically.
 
 seed: 42
 
 data:
   train_sources:
-    - mendeley_india_cvd
-  external_test_sources:
-    - bangladesh_cardiac        # India -> Bangladesh cross-country test
-  target: TODO_target_column    # confirm meaning after download (CAD vs general CVD)
+    - bangladesh_cardiac
+  pipeline_test_sources:
+    - mendeley_india_cvd        # use only to check code runs end to end
+  target: heart_disease         # shared-schema name, 1 = present, 0 = absent
   positive_label: 1
+  min_age: 18                   # adults only (Bangladesh data includes ages 4-97)
+
+  # Features used to train the main (Bangladesh) model, in shared-schema names.
   features:
-    numeric: []                 # e.g. age, systolic_bp, total_cholesterol, ...
-    categorical: []             # e.g. sex, smoking, diabetes, ...
-  # Clinically plausible ranges; values outside are flagged/clipped during cleaning.
-  plausible_ranges: {}
+    numeric:
+      - age
+      - bmi
+      - bp_mmhg
+      - total_cholesterol
+      - hdl
+      - ldl
+      - triglycerides
+      - random_blood_sugar
+      - hemoglobin
+      - creatinine
+      - platelets
+      - sodium
+      - potassium
+      - chloride
+    categorical:                # binary 0/1
+      - sex_male
+      - family_history
+      - hypertension
+      - diabetes
+      - chest_pain
+
+  # Only these exist in both datasets with comparable meaning (India <-> Bangladesh tests).
+  shared_features: [age, sex_male, bp_mmhg, total_cholesterol, chest_pain]
+
+  # Dropped from the Bangladesh data, with the reason (see audit).
+  excluded_columns:
+    unit: "leaks the label: every CCU patient is positive"
+    troponin_i: "acute-injury marker measured at admission; two incompatible assays; censored values"
+    troponin_assay: "only describes troponin_i"
+    max_hr: "estimated from age (208 - 0.7 x age), not measured"
+    height_cm: "used only to recompute BMI"
+    weight_kg: "used only to recompute BMI"
+
+  # Clinically plausible ranges; values outside become missing during cleaning.
+  plausible_ranges:
+    age: [18, 110]
+    bmi: [10, 70]
+    bp_mmhg: [60, 260]
+    total_cholesterol: [50, 700]
+    hdl: [5, 150]
+    ldl: [10, 500]
+    triglycerides: [20, 2000]
+    random_blood_sugar: [1.5, 50]     # mmol/L
+    hemoglobin: [3, 25]               # g/dL
+    creatinine: [0.1, 20]             # mg/dL
+    platelets: [10000, 1500000]       # cells/uL
+    sodium: [100, 180]                # mmol/L
+    potassium: [1.5, 9]               # mmol/L
+    chloride: [60, 150]               # mmol/L
+    max_heart_rate: [40, 230]
+    oldpeak: [0, 10]
 
 split:
   test_size: 0.2
