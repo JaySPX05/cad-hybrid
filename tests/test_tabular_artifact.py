@@ -10,7 +10,7 @@ import pytest
 from sklearn.linear_model import LogisticRegression
 
 from cad_hybrid.fusion.calibrate import Calibrator
-from cad_hybrid.predict import predict_tabular
+from cad_hybrid.predict import predict_tabular, tabular_threshold
 from cad_hybrid.tabular.artifact import build_artifact, save_artifact, to_frame
 from cad_hybrid.tabular.baseline import logistic_regression
 
@@ -129,7 +129,7 @@ def test_train_final_model_saves_usable_model(tmp_path):
     results = {"lr": train_tabular.summarise(y.to_numpy(), oof["lr"][0])}
     config = {
         "data": {"target": "heart_disease", "plausible_ranges": RANGES},
-        "final": {"calibration": "platt", "threshold": 0.5},
+        "final": {"calibration": "platt", "threshold_method": "youden"},
     }
     path = train_tabular.train_final_model(
         config, models, oof, results, X, y, "lr", "fake_dataset",
@@ -140,6 +140,73 @@ def test_train_final_model_saves_usable_model(tmp_path):
     assert set(meta["cv_metrics"]) == set(train_tabular.METRICS)
     p = predict_tabular({"age": 60, "ldl": 150, "sex_male": 1}, model_path=path)
     assert 0.0 <= p <= 1.0
+    # threshold chosen on the held-out predictions and stored with the model
+    assert 0.0 < meta["threshold"] < 1.0 and meta["threshold_method"] == "youden"
+    assert tabular_threshold(path) == meta["threshold"]
+
+
+def test_train_final_model_uses_configured_threshold_rule(tmp_path):
+    X, y = fake_patients()
+    models = {"lr": LogisticRegression()}
+    oof = {"lr": train_tabular.out_of_fold_predictions(models["lr"], X, y, 5, 1, 0)}
+    results = {"lr": train_tabular.summarise(y.to_numpy(), oof["lr"][0])}
+    config = {
+        "data": {"target": "heart_disease", "plausible_ranges": RANGES},
+        "final": {"calibration": "platt", "threshold_method": "fixed", "threshold_target": 0.3},
+    }
+    path = train_tabular.train_final_model(
+        config, models, oof, results, X, y, "lr", "fake_dataset",
+        output_path=tmp_path / "final.joblib")
+    assert tabular_threshold(path) == 0.3
+
+
+def test_model_without_threshold_returns_none(model_path):
+    assert tabular_threshold(model_path) is None
+
+
+def test_save_oof_writes_labels_and_mean_predictions(tmp_path):
+    X, y = fake_patients()
+    oof = {"lr": np.vstack([np.full(len(y), 0.2), np.full(len(y), 0.4)])}
+    path = train_tabular.save_oof(oof, y, tmp_path / "oof.csv")
+    frame = pd.read_csv(path)
+    assert list(frame.columns) == ["y", "lr"] and frame["lr"].iloc[0] == pytest.approx(0.3)
+
+
+# ---------- scripts/choose_threshold.py ----------
+
+CHOOSE = Path(__file__).resolve().parents[1] / "scripts" / "choose_threshold.py"
+spec2 = importlib.util.spec_from_file_location("choose_threshold", CHOOSE)
+choose_threshold_script = importlib.util.module_from_spec(spec2)
+spec2.loader.exec_module(choose_threshold_script)
+
+
+def test_rechoose_threshold_without_retraining(tmp_path):
+    X, y = fake_patients()
+    models = {"lr": LogisticRegression()}
+    oof = {"lr": train_tabular.out_of_fold_predictions(models["lr"], X, y, 5, 1, 0)}
+    results = {"lr": train_tabular.summarise(y.to_numpy(), oof["lr"][0])}
+    config = {
+        "data": {"target": "heart_disease", "plausible_ranges": RANGES},
+        "final": {"calibration": "platt", "threshold_method": "youden"},
+    }
+    path = train_tabular.train_final_model(
+        config, models, oof, results, X, y, "lr", "fake_dataset",
+        output_path=tmp_path / "final.joblib")
+    oof_path = train_tabular.save_oof(oof, y, tmp_path / "oof.csv")
+    youden = tabular_threshold(path)
+
+    meta = choose_threshold_script.rechoose(
+        config, path, oof_path, tmp_path / "report.md", method="min_sensitivity", target=0.99)
+    assert meta["threshold_method"] == "min_sensitivity"
+    assert tabular_threshold(path) == meta["threshold"] <= youden
+    assert "(chosen)" in (tmp_path / "report.md").read_text(encoding="utf-8")
+
+
+def test_rechoose_rejects_mismatched_predictions(model_path, tmp_path):
+    pd.DataFrame({"y": [0, 1], "other_model": [0.1, 0.9]}).to_csv(tmp_path / "oof.csv", index=False)
+    with pytest.raises(ValueError, match="doesn't match"):
+        choose_threshold_script.rechoose({"final": {}}, model_path, tmp_path / "oof.csv",
+                                         tmp_path / "r.md")
 
 
 def test_train_final_model_rejects_unknown_model(tmp_path):

@@ -47,6 +47,15 @@ def predict_tabular(lab_values: dict, model_path: Path | str = TABULAR_MODEL_PAT
     return float(predict_calibrated(artifact, X)[0])
 
 
+def tabular_threshold(model_path: Path | str = TABULAR_MODEL_PATH) -> float | None:
+    """Decision threshold stored with the lab model: probabilities at or above it are
+    flagged "heart disease likely". None if the model was saved without one.
+
+    It applies to ``predict_tabular()``'s probability only, not to the fused probability.
+    """
+    return load_artifact(str(model_path)).get("threshold")
+
+
 def predict_ecg(image_path: str) -> float:
     """Calibrated CAD probability from an ECG image.
 

@@ -104,7 +104,15 @@ models:
 final:
   model: stack_xgb_tabicl         # see reports/baseline_results_tabular.md; revisit with CARRS
   calibration: platt              # platt suits ~1,000 patients; isotonic needs more data
-  threshold: 0.5                  # placeholder until the threshold task
+  # Decision threshold on the calibrated lab probability ("flag as heart disease likely"),
+  # chosen on the cross-validation (held-out) predictions. Methods:
+  #   youden          - balance sensitivity and specificity (default)
+  #   min_sensitivity - highest threshold that still catches >= threshold_target of sick
+  #                     patients (screening: fewer missed cases, more false alarms)
+  #   fixed           - use threshold_target as the threshold
+  # Which trade-off is right is a clinical/team decision; see reports/threshold_tabular.md.
+  threshold_method: youden
+  threshold_target: null          # e.g. 0.95 for min_sensitivity, 0.5 for fixed
   # predict_tabular() refuses patients with more blank fields than this (out of 19).
   # 97% of training patients had <= 4 missing; mostly-blank inputs are outside what the
   # model has seen and give unreliable scores.
