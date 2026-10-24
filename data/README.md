@@ -17,7 +17,7 @@ Only Indian, Pakistani or Bangladeshi datasets are used. Every dataset must have
 |---|---|---|---|
 | `raw/mendeley_india_cvd/` | Cardiovascular_Disease_Dataset (India, 1,000 patients) | https://doi.org/10.17632/dzz48mvjht.1 | CC BY 4.0 |
 | `raw/bangladesh_cardiac/` | Dataset of clinical, anthropometric, and biochemical parameters in cardiac patients from Northern Bangladesh (1,048 patients) | https://doi.org/10.17632/vf6yrn2jjt.1 | CC BY 4.0 |
-| `raw/ecg_multan_pk/` | ECG Images dataset of Cardiac Patients (Pakistan, 929 images) | https://data.mendeley.com/datasets/gwbz3fsgp8/2 | CC BY 4.0 |
+| `raw/ecg_multan_pk/` | ECG Images dataset of Cardiac Patients (Pakistan, 929 ECGs; folder names suggest 12 images per ECG, confirm after download) | https://doi.org/10.17632/gwbz3fsgp8.2 | CC BY 4.0 |
 | `raw/ecg_bhopal_in/` | ECG Image dataset for Myocardial Infarction Complication (India) | https://doi.org/10.17632/5dhyd9t26m.2 | CC BY 4.0 |
 
 Requested / pending (add a folder when access is granted):
