@@ -34,7 +34,7 @@ src/cad_hybrid/
   evaluation/       metrics with bootstrap CIs, cross-country tests       (shared)
   explain/          SHAP (labs), Grad-CAM (ECG)
   predict.py        single prediction interface used everywhere
-scripts/            train_tabular.py, train_ecg.py, evaluate.py
+scripts/            train_tabular.py, choose_threshold.py, train_ecg.py, evaluate.py
 notebooks/          data audits and exploration only
 app/                internal Streamlit test app
 models/             trained weights, NOT committed
@@ -58,6 +58,7 @@ Then download the datasets into `data/raw/` as described in `data/README.md`.
 
 ```bash
 python scripts/train_tabular.py --config configs/tabular.yaml
+python scripts/choose_threshold.py          # re-choose the lab threshold, no retraining
 python scripts/train_ecg.py --config configs/ecg.yaml
 python scripts/evaluate.py
 streamlit run app/streamlit_app.py

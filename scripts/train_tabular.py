@@ -5,8 +5,11 @@
 
 Steps: load + clean data -> repeated cross-validation for every enabled model ->
 metrics with 95% CIs saved to reports/ -> final model trained on all patients,
-calibrated on its held-out predictions, saved to models/ -> pipeline check on the
-India dataset.
+calibrated on its held-out predictions, decision threshold chosen on them, saved to
+models/ -> pipeline check on the India dataset.
+
+Held-out predictions are also saved to data/processed/oof_tabular.csv (gitignored), so
+the threshold can be re-chosen later with scripts/choose_threshold.py without retraining.
 """
 
 import argparse
@@ -27,8 +30,9 @@ from sklearn.pipeline import make_pipeline
 
 from cad_hybrid.data.tabular_loader import load_dataset
 from cad_hybrid.evaluation.metrics import bootstrap_ci
+from cad_hybrid.evaluation.thresholds import threshold_summary, write_threshold_report
 from cad_hybrid.fusion.calibrate import Calibrator
-from cad_hybrid.tabular.artifact import PROJECT_ROOT, build_artifact, save_artifact
+from cad_hybrid.tabular.artifact import PROJECT_ROOT, build_artifact, load_artifact, save_artifact
 from cad_hybrid.tabular.baseline import logistic_regression, xgboost_model
 from cad_hybrid.tabular.deep_tabular import tabicl_model
 from cad_hybrid.tabular.stack import make_stack
@@ -36,6 +40,8 @@ from cad_hybrid.tabular.stack import make_stack
 METRICS = ["auroc", "auprc", "brier", "sensitivity", "specificity"]
 
 REPORTS_DIR = Path(__file__).resolve().parents[1] / "reports"
+THRESHOLD_REPORT = REPORTS_DIR / "threshold_tabular.md"
+OOF_PATH = PROJECT_ROOT / "data" / "processed" / "oof_tabular.csv"  # gitignored
 
 
 def save_results(results: dict, dataset_id: str, n_patients: int, out_dir: Path = REPORTS_DIR,
@@ -56,7 +62,8 @@ def save_results(results: dict, dataset_id: str, n_patients: int, out_dir: Path 
         "",
         f"Dataset: `{dataset_id}` ({n_patients} patients). Run date: {date.today()}.",
         f"Held-out predictions from repeated stratified {n_folds}-fold CV ({n_repeats} repeats), "
-        "95% bootstrap confidence intervals, threshold 0.5.",
+        "95% bootstrap confidence intervals. Sensitivity and specificity at threshold 0.5 "
+        "for comparison; the final model's threshold is in `reports/threshold_tabular.md`.",
         "",
         "| Model | " + " | ".join(METRICS) + " |",
         "|---" * (len(METRICS) + 1) + "|",
@@ -92,6 +99,19 @@ def out_of_fold_predictions(model, X, y, n_splits: int, n_repeats: int, seed: in
             fold_model.fit(X.iloc[train_idx], y.iloc[train_idx])
             preds[r, test_idx] = fold_model.predict_proba(X.iloc[test_idx])[:, 1]
     return preds
+
+
+def save_oof(oof: dict, y: pd.Series, path: Path = OOF_PATH) -> Path:
+    """Save each model's held-out predictions (averaged over repeats) with the labels.
+
+    Patient-level data: goes to data/processed/, which is gitignored. Never commit it.
+    """
+    frame = pd.DataFrame({"y": y.to_numpy()})
+    for name, preds in oof.items():
+        frame[name] = preds.mean(axis=0)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frame.to_csv(path, index=False)
+    return path
 
 
 def build_models(config: dict, numeric: list[str] | None = None,
@@ -142,13 +162,19 @@ def train_final_model(config: dict, models: dict, oof: dict, results: dict, X: p
 
     Calibration is fitted on the model's cross-validation (held-out) predictions, so it
     learns how the model behaves on patients it hasn't seen, not on its own training data.
+    The decision threshold is chosen on the same held-out predictions, after calibration.
     """
     if name not in models:
         raise ValueError(f"Final model '{name}' isn't enabled in the config. "
                          f"Available: {sorted(models)}")
     final_cfg = config["final"]
 
-    calibrator = Calibrator(final_cfg["calibration"]).fit(oof[name].mean(axis=0), y.to_numpy())
+    held_out = oof[name].mean(axis=0)
+    calibrator = Calibrator(final_cfg["calibration"]).fit(held_out, y.to_numpy())
+    thresholds = threshold_summary(
+        y.to_numpy(), np.clip(calibrator.transform(held_out), 0.0, 1.0),
+        method=final_cfg.get("threshold_method", "youden"),
+        target=final_cfg.get("threshold_target"), seed=config.get("seed", 42))
     model = clone(models[name]).fit(X, y)
 
     metadata = {
@@ -160,7 +186,10 @@ def train_final_model(config: dict, models: dict, oof: dict, results: dict, X: p
         "target": config["data"]["target"],
         "target_meaning": "heart disease present (not CAD-specific)",
         "calibration": final_cfg["calibration"],
-        "threshold": final_cfg["threshold"],
+        "threshold": thresholds["threshold"],
+        "threshold_method": thresholds["method"],
+        "threshold_target": thresholds["target"],
+        "threshold_options": thresholds["options"],
         "cv_metrics": {m: {"value": round(p, 3), "ci_low": round(lo, 3), "ci_high": round(hi, 3)}
                        for m, (p, lo, hi) in results[name].items()},
         "library_versions": library_versions(),
@@ -170,9 +199,23 @@ def train_final_model(config: dict, models: dict, oof: dict, results: dict, X: p
     metadata["max_missing_features"] = final_cfg.get("max_missing_features")
     artifact = build_artifact(model, calibrator, list(X.columns),
                               config["data"].get("plausible_ranges", {}), metadata,
-                              max_missing=final_cfg.get("max_missing_features"))
+                              max_missing=final_cfg.get("max_missing_features"),
+                              threshold=thresholds["threshold"])
     path = output_path or PROJECT_ROOT / final_cfg["output_path"]
     return save_artifact(artifact, path)
+
+
+def print_threshold(meta: dict) -> None:
+    """Print the chosen threshold and the comparison of rules."""
+    print(f"\nDecision threshold: {meta['threshold']:.3f} ({meta['threshold_method']}"
+          + (f", target {meta['threshold_target']}" if meta["threshold_target"] is not None else "")
+          + "). Cross-validated estimates per rule:")
+    for o in meta["threshold_options"]:
+        m = o["cv_metrics"]
+        mark = "  <- chosen" if o["chosen"] else ""
+        print(f"  {o['rule']:20s} t={o['threshold']:.3f}  sens {m['sensitivity']:.3f}  "
+              f"spec {m['specificity']:.3f}  flagged {m['flagged']:.0%}{mark}")
+    print(f"Saved: {THRESHOLD_REPORT}")
 
 
 def pipeline_check(config: dict) -> None:
@@ -238,11 +281,17 @@ def main() -> None:
 
     saved = save_results(results, dataset_id, len(y),
                          n_folds=split["cv_folds"], n_repeats=split["cv_repeats"])
+    saved.append(save_oof(oof, y))
     print("\nSaved:", *saved, sep="\n  ")
 
     model_path = train_final_model(config, models, oof, results, X, y, final_name, dataset_id)
+    meta = load_artifact(str(model_path))["metadata"]
+    write_threshold_report({"threshold": meta["threshold"], "options": meta["threshold_options"],
+                            "prevalence": meta["positive_rate"]},
+                           final_name, dataset_id, len(y), THRESHOLD_REPORT, meta["trained_on"])
     print(f"\nFinal model '{final_name}' trained on all {len(y)} patients, "
           f"calibrated ({config['final']['calibration']}), saved to:\n  {model_path}")
+    print_threshold(meta)
 
     pipeline_check(config)
 
