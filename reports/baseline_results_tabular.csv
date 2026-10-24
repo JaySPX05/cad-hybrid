@@ -9,3 +9,13 @@ xgboost,auprc,0.993,0.99,0.996
 xgboost,brier,0.034,0.027,0.042
 xgboost,sensitivity,0.947,0.929,0.964
 xgboost,specificity,0.96,0.942,0.976
+tabicl,auroc,0.993,0.989,0.997
+tabicl,auprc,0.996,0.993,0.998
+tabicl,brier,0.025,0.018,0.033
+tabicl,sensitivity,0.964,0.948,0.978
+tabicl,specificity,0.973,0.959,0.987
+stack_xgb_tabicl,auroc,0.992,0.986,0.996
+stack_xgb_tabicl,auprc,0.995,0.992,0.997
+stack_xgb_tabicl,brier,0.026,0.019,0.034
+stack_xgb_tabicl,sensitivity,0.964,0.949,0.978
+stack_xgb_tabicl,specificity,0.973,0.958,0.987

@@ -34,7 +34,9 @@ with col_lab:
     if not features:
         st.info("Feature list is empty. Fill it in configs/tabular.yaml after the data audit.")
     for name in features:
-        lab_values[name] = st.text_input(name)
+        value = st.text_input(name, help="Leave blank if not available")
+        if value.strip():
+            lab_values[name] = value.strip()
     # TODO: numeric inputs with units/ranges, 'load test-set row', CSV batch scoring
 
 with col_ecg:
@@ -54,7 +56,7 @@ if st.button("Predict", type="primary"):
     try:
         result = predict(lab_values=lab_values if use_labs and features else None,
                          ecg_image_path=ecg_path)
-    except NotImplementedError as exc:
+    except (NotImplementedError, FileNotFoundError) as exc:
         st.warning(f"Model not available yet: {exc}")
     except ValueError as exc:
         st.error(str(exc))
