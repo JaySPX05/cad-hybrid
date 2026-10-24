@@ -39,6 +39,6 @@ Even after cleaning, CV AUROC ~0.99; lipids alone 0.95; LDL alone 0.89 within th
 Comparable: age, sex, blood pressure, total cholesterol, chest pain (India types 0–2 = yes, 3 asymptomatic = no).
 Not comparable: fasting vs random blood sugar; exercise-test vs age-formula max heart rate; ECG/slope/vessels (India only); lipid subfractions, kidney, electrolytes (Bangladesh only).
 
-## Next
-- Baselines (logistic regression, XGBoost) on the cleaned Bangladesh data with repeated CV and bootstrap CIs.
+## Follow-up
+- Model results on the cleaned Bangladesh data: `reports/baseline_results_tabular.md`; decision threshold: `reports/threshold_tabular.md`.
 - Credible evaluation needs CARRS / South Asia Biobank.

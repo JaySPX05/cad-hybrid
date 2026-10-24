@@ -35,8 +35,9 @@ def predict_tabular(lab_values: dict, model_path: Path | str = TABULAR_MODEL_PAT
     """Calibrated probability of heart disease from one patient's lab values.
 
     ``lab_values`` uses the shared-schema names from ``configs/tabular.yaml``
-    (e.g. ``{"age": 54, "sex_male": 1, "ldl": 150}``). Any field may be left out;
-    missing values are handled by the model. Unknown field names raise ValueError.
+    (e.g. ``{"age": 54, "sex_male": 1, "ldl": 150}``). Fields may be left out, up to
+    ``final.max_missing_features`` (out-of-range values count as missing); more raises
+    ValueError, as do unknown field names and values that aren't numbers.
 
     The model is trained by ``scripts/train_tabular.py`` and saved to
     ``models/tabular/lab_model.joblib``; FileNotFoundError if it hasn't been trained.

@@ -8,7 +8,7 @@ A hybrid machine-learning + deep-learning model for coronary artery disease (CAD
 
 The model has two branches that are trained separately and combined at the end:
 
-- **Lab branch (tabular):** gradient boosting (XGBoost / LightGBM) and a deep tabular model (TabICL), stacked together. Explained with SHAP.
+- **Lab branch (tabular):** XGBoost and a pretrained deep tabular model (TabICL), stacked with a logistic-regression meta-model, then calibrated (Platt) with a decision threshold chosen on held-out predictions. Explanations with SHAP are planned.
 - **ECG branch (images):** an ImageNet-pretrained CNN (PyTorch / timm) fine-tuned on paper ECG images, with its learned features fed into an XGBoost / SVM classifier. Explained with Grad-CAM.
 - **Fusion:** each branch is calibrated, then the two are combined. The model works with lab values only, an ECG only, or both.
 
@@ -25,7 +25,7 @@ configs/            model and data settings (features, label maps, fusion weight
 data/               NOT committed except README + data_register.csv
   raw/              original downloads, one folder per dataset
   interim/          cleaned, de-duplicated
-  processed/        final splits
+  processed/        derived files, e.g. held-out (CV) predictions
 src/cad_hybrid/
   data/             loaders, near-duplicate check, patient-level splits   (shared)
   tabular/          lab branch: baselines, deep tabular, stacking         (Person A)
@@ -38,7 +38,7 @@ scripts/            train_tabular.py, choose_threshold.py, train_ecg.py, evaluat
 notebooks/          data audits and exploration only
 app/                internal Streamlit test app
 models/             trained weights, NOT committed
-reports/            model card and figures
+reports/            data audit, results, threshold report, model card
 tests/              unit tests
 ```
 
@@ -77,7 +77,8 @@ streamlit run app/streamlit_app.py
 | Part | State |
 |---|---|
 | Project structure, fusion, metrics, splits, near-duplicate check | Done (with tests) |
-| Data audit | Next (week 1) |
-| Lab branch | Stubs |
-| ECG branch | Stubs |
-| Streamlit test app | Skeleton |
+| Lab data audit | Done: `reports/data_audit_tabular.md` |
+| Lab branch | Trained: baselines, TabICL, stack, calibration, decision threshold (`reports/`). Next: SHAP |
+| ECG branch | In progress (teammate) |
+| Fusion | Weights and prior are placeholders until both branches exist |
+| Streamlit test app | Works with lab values; ECG pending |

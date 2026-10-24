@@ -2,16 +2,22 @@
 # Weights are hand-set until we have patients with BOTH lab values and an ECG,
 # which is needed to learn them.
 
-calibration:
-  method: isotonic              # or: platt (sigmoid); use platt for very small sets
+# Each branch is calibrated in its own training script (lab: configs/tabular.yaml,
+# final.calibration = platt).
 
-prior_probability: 0.30         # TODO: set from the training data's positive rate
+# TODO (fusion task): must match the base rate each branch was calibrated on. The lab
+# model's training positive rate is 0.565 (reports/threshold_tabular.md); the ECG
+# branch will have its own. With one branch, the prior cancels out and the fused
+# probability equals that branch's probability.
+prior_probability: 0.30
 
 branch_weights:
   tabular: 1.0
   ecg: 1.0
 
-risk_categories:                # thresholds on the fused probability
+# Thresholds on the fused probability. Placeholders: not yet aligned with the lab
+# model's decision threshold (0.540) or with real-world disease rates.
+risk_categories:
   low: [0.0, 0.10]
   moderate: [0.10, 0.20]
   high: [0.20, 1.0]

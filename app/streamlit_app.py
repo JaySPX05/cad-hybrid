@@ -10,7 +10,7 @@ import tempfile
 
 import streamlit as st
 
-from cad_hybrid.predict import load_config, predict
+from cad_hybrid.predict import load_config, predict, tabular_threshold
 
 st.set_page_config(page_title="cad-hybrid test app", layout="wide")
 st.title("cad-hybrid: model test app")
@@ -61,7 +61,15 @@ if st.button("Predict", type="primary"):
     except ValueError as exc:
         st.error(str(exc))
     else:
-        st.metric("Probability of CAD", f"{result.probability:.0%}", result.category)
+        st.metric("Probability of heart disease", f"{result.probability:.0%}", result.category)
+        lab_prob = result.branch_probabilities.get("tabular")
+        if lab_prob is not None:
+            threshold = tabular_threshold()
+            if threshold is not None:
+                flag = "above" if lab_prob >= threshold else "below"
+                st.caption(f"Lab result {lab_prob:.0%} is {flag} the lab model's decision "
+                           f"threshold ({threshold:.0%}). Risk categories are placeholders "
+                           "until fusion is set up.")
         if show_branches:
             st.json(result.branch_probabilities)
         # TODO: SHAP bar chart (lab) and Grad-CAM overlay (ECG)

@@ -3,13 +3,13 @@
 _Draft. Fill in as the project progresses._
 
 ## Overview
-- **What it predicts:** TODO (CAD vs general CVD; decided after the data audit)
+- **What it predicts:** lab branch: presence of heart disease (the training data isn't CAD-specific; see `reports/data_audit_tabular.md`). ECG branch: TODO (labels are MI / history of MI).
 - **Inputs:** lab values, a 12-lead paper ECG image, or both
 - **Output:** probability and risk category (low / moderate / high), with per-branch results and explanations
 - **Status:** research prototype, **not for clinical use**
 
 ## Architecture
-- Lab branch: gradient boosting + deep tabular model (TabICL), stacked
+- Lab branch: XGBoost (after median imputation) + TabICL, stacked with a logistic-regression meta-model; Platt calibration on held-out predictions; decision threshold 0.540 (Youden), see `reports/threshold_tabular.md`
 - ECG branch: ImageNet-pretrained CNN fine-tuned on ECG images, embeddings -> XGBoost/SVM
 - Fusion: calibrated late fusion; weights hand-set (no paired lab + ECG data yet)
 
@@ -18,19 +18,26 @@ South Asian data only (India, Pakistan, Bangladesh). See `data/data_register.csv
 
 | Dataset | Country | Used for | N |
 |---|---|---|---|
-| TODO | | | |
+| Northern Bangladesh cardiac patients (Zia Heart Foundation) | Bangladesh | Lab branch training and cross-validation | 1,035 adults (585 with heart disease) |
+| Mendeley Cardiovascular_Disease_Dataset | India | Lab branch pipeline check only (failed the audit) | 1,000 |
+| ECG images of cardiac patients (Multan) | Pakistan | ECG branch training | TODO |
+| ECG images for MI complication (Bhopal) | India | ECG branch external test | TODO |
 
 ## Evaluation
 | Test set | AUROC (95% CI) | AUPRC | Sensitivity | Specificity | Brier |
 |---|---|---|---|---|---|
-| Internal held-out | TODO | | | | |
+| Lab branch, internal (repeated 5-fold CV, Bangladesh) | 0.991 (0.984 to 0.995) | 0.995 | 0.968 | 0.976 | 0.027 |
+| ECG branch, internal | TODO | | | | |
 | External: Pakistan -> India (ECG) | TODO | | | | |
-| External: India -> Bangladesh (labs) | TODO | | | | |
+| External: Bangladesh -> India (labs, 5 shared features) | 0.557 | | | | |
+
+Lab sensitivity and specificity are cross-validated estimates at the 0.540 threshold. The internal lab scores are far higher than real risk models achieve (hospital selection, very sick vs relatively healthy patients) and will overstate real-world performance. The India test uses a dataset that failed the audit, so it checks the pipeline rather than transfer. Credible evaluation needs CARRS / South Asia Biobank.
 
 Subgroups (sex, age bands): TODO
 
 ## Limitations
 - Small training sets; wide confidence intervals.
+- Lab training data comes from one hospital in Northern Bangladesh; patients with more than 4 of 19 lab values missing are refused.
 - ECG labels are MI / history of MI, so the ECG branch detects heart attacks, not early CAD.
 - No dataset has lab values and ECGs for the same patients; fusion weights are not learned.
 - No longitudinal outcomes; no risk-over-time prediction.

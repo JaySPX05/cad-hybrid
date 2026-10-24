@@ -10,7 +10,7 @@ Only Indian, Pakistani or Bangladeshi datasets are used. Every dataset must have
 |---|---|
 | `raw/` | Original downloads, untouched. One subfolder per dataset. |
 | `interim/` | Cleaned and de-duplicated data. |
-| `processed/` | Final train / validation / test splits used for training. |
+| `processed/` | Derived files, e.g. `oof_tabular.csv` (held-out predictions written by `scripts/train_tabular.py`). Patient-level: never commit. |
 
 ## Datasets and where they go
 | Folder | Dataset | Get it from | Licence / access |
