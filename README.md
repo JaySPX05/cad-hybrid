@@ -8,7 +8,7 @@ A hybrid machine-learning + deep-learning model for coronary artery disease (CAD
 
 The model has two branches that are trained separately and combined at the end:
 
-- **Lab branch (tabular):** XGBoost and a pretrained deep tabular model (TabICL), stacked with a logistic-regression meta-model, then calibrated (Platt) with a decision threshold chosen on held-out predictions. Explanations with SHAP are planned.
+- **Lab branch (tabular):** XGBoost and a pretrained deep tabular model (TabICL), stacked with a logistic-regression meta-model, then calibrated (Platt) with a decision threshold chosen on held-out predictions. Explained with SHAP (per patient in the app, overall in `reports/shap_tabular.md`).
 - **ECG branch (images):** an ImageNet-pretrained CNN (PyTorch / timm) fine-tuned on paper ECG images, with its learned features fed into an XGBoost / SVM classifier. Explained with Grad-CAM.
 - **Fusion:** each branch is calibrated, then the two are combined. The model works with lab values only, an ECG only, or both.
 
@@ -34,7 +34,7 @@ src/cad_hybrid/
   evaluation/       metrics with bootstrap CIs, cross-country tests       (shared)
   explain/          SHAP (labs), Grad-CAM (ECG)
   predict.py        single prediction interface used everywhere
-scripts/            train_tabular.py, choose_threshold.py, train_ecg.py, evaluate.py
+scripts/            train_tabular.py, choose_threshold.py, explain_tabular.py, train_ecg.py, evaluate.py
 notebooks/          data audits and exploration only
 app/                internal Streamlit test app
 models/             trained weights, NOT committed
@@ -59,6 +59,7 @@ Then download the datasets into `data/raw/` as described in `data/README.md`.
 ```bash
 python scripts/train_tabular.py --config configs/tabular.yaml
 python scripts/choose_threshold.py          # re-choose the lab threshold, no retraining
+python scripts/explain_tabular.py           # SHAP report for the saved lab model
 python scripts/train_ecg.py --config configs/ecg.yaml
 python scripts/evaluate.py
 streamlit run app/streamlit_app.py
@@ -78,7 +79,7 @@ streamlit run app/streamlit_app.py
 |---|---|
 | Project structure, fusion, metrics, splits, near-duplicate check | Done (with tests) |
 | Lab data audit | Done: `reports/data_audit_tabular.md` |
-| Lab branch | Trained: baselines, TabICL, stack, calibration, decision threshold (`reports/`). Next: SHAP |
+| Lab branch | Trained: baselines, TabICL, stack, calibration, decision threshold, SHAP explanations (`reports/`) |
 | ECG branch | In progress (teammate) |
 | Fusion | Weights and prior are placeholders until both branches exist |
-| Streamlit test app | Works with lab values; ECG pending |
+| Streamlit test app | Works with lab values, incl. per-patient SHAP; ECG pending |

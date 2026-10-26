@@ -5,7 +5,7 @@ _Draft. Fill in as the project progresses._
 ## Overview
 - **What it predicts:** lab branch: presence of heart disease (the training data isn't CAD-specific; see `reports/data_audit_tabular.md`). ECG branch: TODO (labels are MI / history of MI).
 - **Inputs:** lab values, a 12-lead paper ECG image, or both
-- **Output:** probability and risk category (low / moderate / high), with per-branch results and explanations
+- **Output:** probability and risk category (low / moderate / high), with per-branch results and explanations (lab: SHAP contributions per value; ECG: Grad-CAM, TODO)
 - **Status:** research prototype, **not for clinical use**
 
 ## Architecture

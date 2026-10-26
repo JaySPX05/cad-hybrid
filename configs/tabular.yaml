@@ -116,3 +116,12 @@ final:
   # model has seen and give unreliable scores.
   max_missing_features: 4
   output_path: models/tabular/lab_model.joblib   # gitignored
+
+# SHAP explanations of the final model (src/cad_hybrid/explain/shap_tabular.py).
+# Cost per patient is about nsamples x background_size model rows; TabICL is slow on
+# CPU, so keep these small. Larger = more precise explanations, slower. At 200 samples
+# a single contribution is typically within ~3 percentage points of a long run.
+explain:
+  background_size: 10     # weighted k-means centres of the training data (not real patients)
+  nsamples: 200           # feature combinations evaluated per patient
+  report_patients: 50     # patients explained for reports/shap_tabular.md
