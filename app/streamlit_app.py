@@ -10,7 +10,7 @@ import tempfile
 
 import streamlit as st
 
-from cad_hybrid.predict import load_config, predict, tabular_threshold
+from cad_hybrid.predict import explain_tabular, load_config, predict, tabular_threshold
 
 st.set_page_config(page_title="cad-hybrid test app", layout="wide")
 st.title("cad-hybrid: model test app")
@@ -22,6 +22,9 @@ with st.sidebar:
     st.selectbox("Model version", ["baseline", "hybrid"], index=1,
                  help="Switches between saved model versions once they exist.")
     show_branches = st.toggle("Show each branch's result", value=True)
+    explain_labs = st.toggle("Explain the lab result (SHAP)", value=False,
+                             help="Shows which lab values pushed the risk up or down. "
+                                  "Can take a minute or more with TabICL on CPU.")
 
 col_lab, col_ecg = st.columns(2)
 
@@ -72,4 +75,17 @@ if st.button("Predict", type="primary"):
                            "until fusion is set up.")
         if show_branches:
             st.json(result.branch_probabilities)
-        # TODO: SHAP bar chart (lab) and Grad-CAM overlay (ECG)
+        if explain_labs and lab_prob is not None:
+            from cad_hybrid.explain.shap_tabular import plot_patient
+
+            with st.spinner("Explaining the lab result..."):
+                try:
+                    explanation = explain_tabular(lab_values)
+                except ValueError as exc:
+                    st.warning(f"No explanation: {exc}")
+                else:
+                    st.pyplot(plot_patient(explanation))
+                    st.caption("Each bar: how much that value moved this patient's risk away "
+                               "from the average patient. Describes the model, not causes "
+                               "of disease; blank fields use the training median.")
+        # TODO: Grad-CAM overlay (ECG)

@@ -11,7 +11,7 @@ from sklearn.linear_model import LogisticRegression
 
 from cad_hybrid.fusion.calibrate import Calibrator
 from cad_hybrid.predict import predict_tabular, tabular_threshold
-from cad_hybrid.tabular.artifact import build_artifact, save_artifact, to_frame
+from cad_hybrid.tabular.artifact import build_artifact, load_artifact, save_artifact, to_frame
 from cad_hybrid.tabular.baseline import logistic_regression
 
 FEATURES = ["age", "ldl", "sex_male"]
@@ -143,6 +143,9 @@ def test_train_final_model_saves_usable_model(tmp_path):
     # threshold chosen on the held-out predictions and stored with the model
     assert 0.0 < meta["threshold"] < 1.0 and meta["threshold_method"] == "youden"
     assert tabular_threshold(path) == meta["threshold"]
+    # explanation background stored with the model (synthetic centres, not patients)
+    background = load_artifact.__wrapped__(str(path))["explain_background"]
+    assert len(background["centres"]) <= 10 and list(background["centres"].columns) == list(X.columns)
 
 
 def test_train_final_model_uses_configured_threshold_rule(tmp_path):

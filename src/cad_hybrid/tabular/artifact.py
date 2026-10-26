@@ -27,11 +27,13 @@ DEFAULT_PATH = PROJECT_ROOT / "models" / "tabular" / "lab_model.joblib"
 
 def build_artifact(model, calibrator, features: list[str], plausible_ranges: dict,
                    metadata: dict, max_missing: int | None = None,
-                   threshold: float | None = None) -> dict:
+                   threshold: float | None = None, explain_background=None,
+                   explain_nsamples: int | None = None) -> dict:
     """Bundle a trained model and calibrator with what's needed to use them.
 
     ``max_missing``: the most blank fields a patient may have (None = no limit).
     ``threshold``: decision threshold on the calibrated probability (None = not chosen).
+    ``explain_background``: synthetic typical patients and their weights, used by SHAP.
     """
     return {
         "model": model,
@@ -40,6 +42,8 @@ def build_artifact(model, calibrator, features: list[str], plausible_ranges: dic
         "plausible_ranges": dict(plausible_ranges),
         "max_missing": max_missing,
         "threshold": threshold,
+        "explain_background": explain_background,
+        "explain_nsamples": explain_nsamples,
         "metadata": dict(metadata),
     }
 

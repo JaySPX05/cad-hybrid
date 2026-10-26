@@ -57,6 +57,22 @@ def tabular_threshold(model_path: Path | str = TABULAR_MODEL_PATH) -> float | No
     return load_artifact(str(model_path)).get("threshold")
 
 
+def explain_tabular(lab_values: dict, model_path: Path | str = TABULAR_MODEL_PATH,
+                    nsamples: int | None = None) -> dict:
+    """Which lab values pushed this patient's probability up or down (SHAP).
+
+    Returns ``{"baseline", "probability", "contributions"}``; contributions is a
+    DataFrame (feature, value, contribution, given), largest effect first, and
+    ``baseline + sum(contributions) == probability``. Slow with TabICL on CPU.
+    """
+    from .explain.shap_tabular import explain_patient
+
+    artifact = load_artifact(str(model_path))
+    X = to_frame(lab_values, artifact["features"])
+    check_completeness(artifact, X)
+    return explain_patient(artifact, X, nsamples)
+
+
 def predict_ecg(image_path: str) -> float:
     """Calibrated CAD probability from an ECG image.
 

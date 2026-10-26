@@ -31,6 +31,7 @@ from sklearn.pipeline import make_pipeline
 from cad_hybrid.data.tabular_loader import load_dataset
 from cad_hybrid.evaluation.metrics import bootstrap_ci
 from cad_hybrid.evaluation.thresholds import threshold_summary, write_threshold_report
+from cad_hybrid.explain.shap_tabular import make_background
 from cad_hybrid.fusion.calibrate import Calibrator
 from cad_hybrid.tabular.artifact import PROJECT_ROOT, build_artifact, load_artifact, save_artifact
 from cad_hybrid.tabular.baseline import logistic_regression, xgboost_model
@@ -200,7 +201,8 @@ def train_final_model(config: dict, models: dict, oof: dict, results: dict, X: p
     artifact = build_artifact(model, calibrator, list(X.columns),
                               config["data"].get("plausible_ranges", {}), metadata,
                               max_missing=final_cfg.get("max_missing_features"),
-                              threshold=thresholds["threshold"])
+                              threshold=thresholds["threshold"],
+                              **explain_settings(config, X))
     path = output_path or PROJECT_ROOT / final_cfg["output_path"]
     return save_artifact(artifact, path)
 
@@ -216,6 +218,17 @@ def print_threshold(meta: dict) -> None:
         print(f"  {o['rule']:20s} t={o['threshold']:.3f}  sens {m['sensitivity']:.3f}  "
               f"spec {m['specificity']:.3f}  flagged {m['flagged']:.0%}{mark}")
     print(f"Saved: {THRESHOLD_REPORT}")
+
+
+def explain_settings(config: dict, X: pd.DataFrame) -> dict:
+    """Background and settings for SHAP explanations, stored with the model."""
+    cfg = config.get("explain", {})
+    categorical = config["data"].get("features", {}).get("categorical", [])
+    return {
+        "explain_background": make_background(X, categorical, cfg.get("background_size", 10),
+                                              seed=config.get("seed", 42)),
+        "explain_nsamples": cfg.get("nsamples", 200),
+    }
 
 
 def pipeline_check(config: dict) -> None:
