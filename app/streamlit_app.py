@@ -64,7 +64,10 @@ if st.button("Predict", type="primary"):
     except ValueError as exc:
         st.error(str(exc))
     else:
-        st.metric("Probability of heart disease", f"{result.probability:.0%}", result.category)
+        st.metric("Probability of CAD", f"{result.probability:.0%}", result.category)
+        st.caption("The lab part predicts heart disease in general and is used as a "
+                   "stand-in for CAD (the lab data has no CAD label). Combined lab + ECG "
+                   "results are not validated yet.")
         lab_prob = result.branch_probabilities.get("tabular")
         if lab_prob is not None:
             threshold = tabular_threshold()
@@ -72,7 +75,7 @@ if st.button("Predict", type="primary"):
                 flag = "above" if lab_prob >= threshold else "below"
                 st.caption(f"Lab result {lab_prob:.0%} is {flag} the lab model's decision "
                            f"threshold ({threshold:.0%}). Risk categories are placeholders "
-                           "until fusion is set up.")
+                           "until they are agreed.")
         if show_branches:
             st.json(result.branch_probabilities)
         if explain_labs and lab_prob is not None:

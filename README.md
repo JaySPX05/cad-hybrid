@@ -10,7 +10,8 @@ The model has two branches that are trained separately and combined at the end:
 
 - **Lab branch (tabular):** XGBoost and a pretrained deep tabular model (TabICL), stacked with a logistic-regression meta-model, then calibrated (Platt) with a decision threshold chosen on held-out predictions. Explained with SHAP (per patient in the app, overall in `reports/shap_tabular.md`).
 - **ECG branch (images):** an ImageNet-pretrained CNN (PyTorch / timm) fine-tuned on paper ECG images, with its learned features fed into an XGBoost / SVM classifier. Explained with Grad-CAM.
-- **Fusion:** each branch is calibrated, then the two are combined. The model works with lab values only, an ECG only, or both.
+- **Fusion:** each branch is calibrated on its own data; its probability is turned into a likelihood ratio against its own training positive rate, and the ratios are combined from a target prior (`configs/fusion.yaml`). The model works with lab values only, an ECG only, or both.
+- **Target:** CAD. The ECG branch predicts CAD (MI or history of MI vs normal); the lab branch predicts heart disease in general and is used as a stand-in, because the lab data has no CAD label.
 
 The two branches use different patients (no public South Asian dataset has both labs and ECGs for the same person), so they can't be trained as one network.
 
@@ -81,5 +82,5 @@ streamlit run app/streamlit_app.py
 | Lab data audit | Done: `reports/data_audit_tabular.md` |
 | Lab branch | Trained: baselines, TabICL, stack, calibration, decision threshold, SHAP explanations (`reports/`) |
 | ECG branch | In progress (teammate) |
-| Fusion | Weights and prior are placeholders until both branches exist |
+| Fusion | Per-branch training rates and target prior in place; weights (1.0) and risk categories are unvalidated placeholders until paired lab + ECG data exists |
 | Streamlit test app | Works with lab values, incl. per-patient SHAP; ECG pending |
