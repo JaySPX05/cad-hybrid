@@ -1,0 +1,31 @@
+{
+    "test_images": 37,
+    "cad_positive": 17,
+    "normal": 20,
+    "threshold": 0.5,
+    "metrics": {
+        "auroc": 0.9500000000000001,
+        "sensitivity": 1.0,
+        "specificity": 0.85,
+        "brier_score": 0.08108108066592833
+    },
+    "bootstrap_95_ci": {
+        "auroc": [
+            0.875,
+            1.0
+        ],
+        "sensitivity": [
+            1.0,
+            1.0
+        ],
+        "specificity": [
+            0.6666666666666666,
+            1.0
+        ],
+        "brier_score": [
+            4.639679924184717e-19,
+            0.1891891879437309
+        ]
+    },
+    "bootstrap_iterations": 1000
+}

@@ -1,22 +1,28 @@
-# ECG (image) branch configuration.
+
+# ECG image branch configuration
 
 seed: 42
 
 data:
   train_sources:
-    - ecg_multan_pk             # Pakistan
+    - ecg_multan_pk
   external_test_sources:
-    - ecg_bhopal_in             # India: Pakistan -> India cross-country test
-  # Map each dataset's original class names to our labels.
-  # Confirm against the folder/class names after download.
+    - ecg_bhopal_in
+
   label_map:
     ecg_multan_pk:
       "Myocardial Infarction": cad_positive
       "History of MI": cad_positive
       "Normal": negative
-      "Abnormal Heartbeat": arrhythmia   # kept separate: arrhythmia is not CAD
-    ecg_bhopal_in: {}                    # TODO after download
+      "Abnormal Heartbeat": arrhythmia
+    ecg_bhopal_in: {}
+
   classes: [negative, cad_positive, arrhythmia]
+
+  processed_splits:
+    train: data/processed/train.csv
+    validation: data/processed/validation.csv
+    test: data/processed/test.csv
 
 preprocess:
   image_size: 512
@@ -28,26 +34,45 @@ preprocess:
     brightness: 0.15
     contrast: 0.15
     blur_prob: 0.2
-    horizontal_flip: false      # never flip: a mirrored ECG is not a valid ECG
+    horizontal_flip: false
     vertical_flip: false
 
 dedupe:
   hash: phash
-  max_hamming_distance: 4       # images closer than this are treated as near-duplicates
+  max_hamming_distance: 4
 
 model:
-  backbone: efficientnet_b0     # timm name; alternative: resnet50
-  pretrained: imagenet          # non-medical weights only (data rule)
-  stage1:                       # frozen backbone, train new head
+  backbone: efficientnet_b0
+  pretrained: imagenet
+  stage1:
     epochs: 10
     lr: 1.0e-3
-  stage2:                       # unfreeze upper layers
+  stage2:
     epochs: 20
     lr: 1.0e-4
     unfreeze_last_n_blocks: 2
   batch_size: 16
   early_stopping_patience: 5
 
+  classifier: CalibratedClassifierCV
+  classifier_path: models/ecg_calibrated_classifier.pkl
+
 embed_gbm:
   enabled: true
-  head: xgboost                 # or: svm
+  head: xgboost
+
+calibration:
+  method: platt_sigmoid
+  path: models/cad_platt_calibrator.pkl
+
+prediction:
+  binary_score: "P(CAD) / (P(CAD) + P(normal))"
+  arrhythmia_probability: separate
+  threshold: 0.5
+
+class_indices:
+  "0": cad_positive
+  "1": negative
+  "2": arrhythmia
+
+metadata: models/ecg_metadata.json
