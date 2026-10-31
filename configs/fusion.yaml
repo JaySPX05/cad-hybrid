@@ -1,22 +1,29 @@
-# Fusion configuration.
-# Weights are hand-set until we have patients with BOTH lab values and an ECG,
-# which is needed to learn them.
+# Fusion configuration (src/cad_hybrid/fusion/fuse.py).
+# Target: CAD. The ECG branch predicts CAD (MI or history of MI vs normal); the lab
+# branch predicts heart disease in general, used as a stand-in for CAD because the lab
+# data has no CAD label. See the Project doc claude/fusion-integration-plan.md.
 
-# Each branch is calibrated in its own training script (lab: configs/tabular.yaml,
-# final.calibration = platt).
+# How common CAD is among the people the result is meant for. A product decision
+# (screening vs hospital patients). null = use the lab model's training positive rate
+# (0.565 for the current model), so a lab-only result equals predict_tabular() and the
+# lab decision threshold still applies.
+target_prior: null
 
-# TODO (fusion task): must match the base rate each branch was calibrated on. The lab
-# model's training positive rate is 0.565 (reports/threshold_tabular.md); the ECG
-# branch will have its own. With one branch, the prior cancels out and the fused
-# probability equals that branch's probability.
-prior_probability: 0.30
+# Each branch's training positive rate: what its probabilities were calibrated on.
+# null for tabular = read it from the saved lab model. The ECG branch must set it once
+# its model exists (CAD / (CAD + normal) among training ECGs).
+branch_priors:
+  tabular: null
+  ecg: null
 
+# 1.0 each = naive-Bayes assumption (independent evidence given disease status).
+# Can't be learned or checked until there are patients with both labs and an ECG.
 branch_weights:
   tabular: 1.0
   ecg: 1.0
 
-# Thresholds on the fused probability. Placeholders: not yet aligned with the lab
-# model's decision threshold (0.540) or with real-world disease rates.
+# Cut-offs on the fused probability. Placeholders: screening-style values that don't
+# fit a hospital-level prior; to be decided together (e.g. based on the lab threshold).
 risk_categories:
   low: [0.0, 0.10]
   moderate: [0.10, 0.20]

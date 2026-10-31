@@ -3,7 +3,7 @@
 _Draft. Fill in as the project progresses._
 
 ## Overview
-- **What it predicts:** lab branch: presence of heart disease (the training data isn't CAD-specific; see `reports/data_audit_tabular.md`). ECG branch: TODO (labels are MI / history of MI).
+- **What it predicts:** CAD. ECG branch: MI or history of MI vs normal ECG (arrhythmia excluded). Lab branch: presence of heart disease in general, used as a stand-in for CAD because the lab data has no CAD label (see `reports/data_audit_tabular.md`); how close the two are is unknown for this data.
 - **Inputs:** lab values, a 12-lead paper ECG image, or both
 - **Output:** probability and risk category (low / moderate / high), with per-branch results and explanations (lab: SHAP contributions per value; ECG: Grad-CAM, TODO)
 - **Status:** research prototype, **not for clinical use**
@@ -11,7 +11,7 @@ _Draft. Fill in as the project progresses._
 ## Architecture
 - Lab branch: XGBoost (after median imputation) + TabICL, stacked with a logistic-regression meta-model; Platt calibration on held-out predictions; decision threshold 0.540 (Youden), see `reports/threshold_tabular.md`
 - ECG branch: ImageNet-pretrained CNN fine-tuned on ECG images, embeddings -> XGBoost/SVM
-- Fusion: calibrated late fusion; weights hand-set (no paired lab + ECG data yet)
+- Fusion: each branch's calibrated probability is converted to a likelihood ratio against its own training positive rate (lab 0.565), then combined on the log-odds scale from a target prior (default: the lab training rate). Weights 1.0 each (naive-Bayes assumption), hand-set because no paired lab + ECG data exists; the fused probability is not validated.
 
 ## Training data
 South Asian data only (India, Pakistan, Bangladesh). See `data/data_register.csv` and `ATTRIBUTIONS.md`.

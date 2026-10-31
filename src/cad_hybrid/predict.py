@@ -81,14 +81,41 @@ def predict_ecg(image_path: str) -> float:
     raise NotImplementedError("ECG model not trained yet")
 
 
-def predict(lab_values: dict | None = None, ecg_image_path: str | None = None) -> Prediction:
+def fusion_priors(cfg: dict, tabular_model_path: Path | str = TABULAR_MODEL_PATH
+                  ) -> tuple[dict, float]:
+    """Each branch's training positive rate, and the target prior, from the fusion config.
+
+    A null tabular prior or target prior means "the saved lab model's training positive
+    rate", read from the model's metadata.
+    """
+    priors = dict(cfg.get("branch_priors") or {})
+    try:
+        lab_rate = load_artifact(str(tabular_model_path))["metadata"].get("positive_rate")
+    except FileNotFoundError:
+        lab_rate = None
+    if priors.get("tabular") is None:
+        priors["tabular"] = lab_rate
+    target = cfg.get("target_prior")
+    if target is None:
+        target = lab_rate
+    if target is None:
+        raise ValueError("target_prior is null (= the lab model's training rate) but no lab "
+                         "model is saved; set target_prior in configs/fusion.yaml")
+    return priors, float(target)
+
+
+def predict(lab_values: dict | None = None, ecg_image_path: str | None = None,
+            tabular_model_path: Path | str = TABULAR_MODEL_PATH,
+            fusion_config: dict | None = None) -> Prediction:
     """Score whatever inputs are available and fuse them."""
     if lab_values is None and ecg_image_path is None:
         raise ValueError("Provide lab values, an ECG image, or both")
-    cfg = load_config("fusion")
+    cfg = fusion_config or load_config("fusion")
     branches = {
-        "tabular": predict_tabular(lab_values) if lab_values is not None else None,
+        "tabular": (predict_tabular(lab_values, tabular_model_path)
+                    if lab_values is not None else None),
         "ecg": predict_ecg(ecg_image_path) if ecg_image_path is not None else None,
     }
-    prob = fuse(branches, prior=cfg["prior_probability"], weights=cfg["branch_weights"])
+    priors, target = fusion_priors(cfg, tabular_model_path)
+    prob = fuse(branches, priors, target, weights=cfg.get("branch_weights"))
     return Prediction(prob, risk_category(prob, cfg["risk_categories"]), branches)
