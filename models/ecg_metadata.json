@@ -1,0 +1,21 @@
+
+{
+  "training_positive_rate": 0.5899581589958159,
+  "positive_rate_unit": "image_level_cad_vs_normal_only",
+  "training_cad_images": 282,
+  "training_normal_images": 196,
+  "training_arrhythmia_images": 160,
+  "label_mapping": {
+    "0": "cad_positive",
+    "1": "negative",
+    "2": "arrhythmia"
+  },
+  "base_classifier": "StandardScaler + RBF SVC",
+  "feature_extractor": "ResNet18 pretrained on ImageNet",
+  "calibration_method": "Group-aware OOF multiclass logistic calibration followed by binary Platt calibration",
+  "calibration_bundle": "models/ecg_calibration_bundle.pkl",
+  "calibration_validation_unit": "One feature vector per duplicate group",
+  "binary_score": "P(CAD) / (P(CAD) + P(normal))",
+  "arrhythmia_handling": "Excluded from binary CAD calibration; probability returned separately",
+  "model_retrained": false
+}

@@ -1,94 +1,444 @@
-"""Internal test frontend for trying the model by hand.
 
-    streamlit run app/streamlit_app.py
+"""CardioPredict - ECG and Tabular Research Prototype.
 
-Not a product UI. Works with lab values only, an ECG image only, or both. Until the
-models are trained it shows a notice instead of a prediction.
+The tabular branch predicts general heart disease.
+The ECG branch predicts CAD.
+Both predictions are displayed independently.
 """
 
 import tempfile
+from pathlib import Path
 
 import streamlit as st
 
-from cad_hybrid.predict import explain_tabular, load_config, predict, tabular_threshold
+from cad_hybrid.predict import (
+    explain_tabular,
+    load_config,
+    predict,
+    tabular_threshold,
+)
 
-st.set_page_config(page_title="cad-hybrid test app", layout="wide")
-st.title("cad-hybrid: model test app")
-st.caption("Research prototype. Not for clinical use. Trained on South Asian datasets "
-           "(see ATTRIBUTIONS.md).")
+# --------------------------------------------------
+# PAGE CONFIGURATION
+# --------------------------------------------------
+
+st.set_page_config(
+    page_title="CardioPredict | Research Prototype",
+    page_icon="❤️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# --------------------------------------------------
+# PROFESSIONAL UI STYLING
+# --------------------------------------------------
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+
+:root {
+    --ink: #203746;
+    --muted: #71818B;
+    --teal: #267B75;
+    --line: #DFE7EA;
+    --canvas: #F3F6F7;
+}
+
+.stApp {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+}
+
+.block-container {
+    max-width: 1320px;
+    padding-top: 1.5rem;
+    padding-bottom: 2.5rem;
+}
+
+.brand-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 22px;
+}
+
+.brand-mark {
+    width: 43px;
+    height: 43px;
+    border-radius: 11px;
+    background: #E4F0EE;
+    color: #267B75;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 17px;
+}
+
+.brand-name {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.brand-sub {
+    color: #7B8A93;
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.page-heading {
+    font-family: 'Manrope', sans-serif;
+    font-size: 29px;
+    font-weight: 800;
+    margin-bottom: 7px;
+}
+
+.page-subheading {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 24px;
+}
+
+.section-card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    padding: 20px;
+    margin-bottom: 15px;
+}
+
+.section-title {
+    font-size: 17px;
+    font-weight: 800;
+    margin-bottom: 5px;
+}
+
+.section-description {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 15px;
+}
+
+.result-panel {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    padding: 20px;
+    min-height: 180px;
+}
+
+.result-heading {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.result-value {
+    color: var(--teal);
+    font-family: 'Manrope', sans-serif;
+    font-size: 34px;
+    font-weight: 800;
+    margin-top: 12px;
+}
+
+.helper-box {
+    background: #F7F9FA;
+    border: 1px solid #E4EAED;
+    border-radius: 10px;
+    padding: 15px;
+    color: #60747F;
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.stButton > button {
+    background: #267B75;
+    color: white;
+    border: 1px solid #267B75;
+    border-radius: 8px;
+    min-height: 45px;
+    font-weight: 700;
+}
+
+.stButton > button:hover {
+    background: #1E655F;
+    color: white;
+    border-color: #1E655F;
+}
+
+.footer {
+    color: #89969D;
+    font-size: 10px;
+    text-align: center;
+    padding: 25px 0 5px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# --------------------------------------------------
+# HEADER
+# --------------------------------------------------
+
+st.markdown("""
+<div class="brand-row">
+    <div class="brand-mark">CP</div>
+    <div>
+        <div class="brand-name">CARDIOPREDICT</div>
+        <div class="brand-sub">CARDIOVASCULAR RESEARCH PLATFORM</div>
+    </div>
+</div>
+
+<div class="page-heading">
+    Cardiovascular Health Assessment
+</div>
+
+<div class="page-subheading">
+    Independent machine-learning predictions using clinical
+    measurements and ECG image analysis.
+</div>
+""", unsafe_allow_html=True)
+
+
+# --------------------------------------------------
+# MODEL CONFIGURATION
+# --------------------------------------------------
+
+try:
+    tab_cfg = load_config("tabular")
+    features = (
+        tab_cfg["data"]["features"]["numeric"]
+        + tab_cfg["data"]["features"]["categorical"]
+    )
+except (FileNotFoundError, KeyError, TypeError) as error:
+    st.error(f"Could not load tabular configuration: {error}")
+    st.stop()
+
+
+# --------------------------------------------------
+# SIDEBAR
+# --------------------------------------------------
 
 with st.sidebar:
-    st.header("Options")
-    st.selectbox("Model version", ["baseline", "hybrid"], index=1,
-                 help="Switches between saved model versions once they exist.")
-    show_branches = st.toggle("Show each branch's result", value=True)
-    explain_labs = st.toggle("Explain the lab result (SHAP)", value=False,
-                             help="Shows which lab values pushed the risk up or down. "
-                                  "Can take a minute or more with TabICL on CPU.")
+    st.header("Analysis Options")
 
-col_lab, col_ecg = st.columns(2)
+    explain_labs = st.toggle(
+        "Show SHAP explanation",
+        value=False,
+        help="Explain the tabular model prediction.",
+    )
 
-with col_lab:
-    st.subheader("Lab values")
-    tab_cfg = load_config("tabular")
-    features = tab_cfg["data"]["features"]["numeric"] + tab_cfg["data"]["features"]["categorical"]
-    use_labs = st.checkbox("Use lab values", value=bool(features))
-    lab_values = {}
-    if not features:
-        st.info("Feature list is empty. Fill it in configs/tabular.yaml after the data audit.")
-    for name in features:
-        value = st.text_input(name, help="Leave blank if not available")
-        if value.strip():
-            lab_values[name] = value.strip()
-    # TODO: numeric inputs with units/ranges, 'load test-set row', CSV batch scoring
+    st.divider()
 
-with col_ecg:
-    st.subheader("ECG image")
-    ecg_file = st.file_uploader("Upload a photo or scan of a 12-lead ECG",
-                                type=["jpg", "jpeg", "png"])
+    st.caption("Research prototype — not for clinical diagnosis.")
+
+
+# --------------------------------------------------
+# INPUT SECTIONS
+# --------------------------------------------------
+
+lab_col, ecg_col = st.columns(2, gap="large")
+
+lab_values = {}
+
+with lab_col:
+    st.markdown("""
+    <div class="section-card">
+        <div class="section-title">01. Patient Measurements</div>
+        <div class="section-description">
+            Enter available clinical and laboratory measurements.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    use_labs = st.checkbox(
+        "Enable tabular prediction",
+        value=False,
+    )
+
+    if use_labs:
+        with st.container(border=True):
+            st.markdown("**Clinical and laboratory inputs**")
+
+            for name in features:
+                value = st.text_input(
+                    name.replace("_", " ").title(),
+                    key=f"lab_{name}",
+                    placeholder="Enter value",
+                )
+
+                if value.strip():
+                    lab_values[name] = value.strip()
+
+with ecg_col:
+    st.markdown("""
+    <div class="section-card">
+        <div class="section-title">02. ECG Image Analysis</div>
+        <div class="section-description">
+            Upload a 12-lead ECG image for CAD prediction.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    ecg_file = st.file_uploader(
+        "Upload ECG image",
+        type=["jpg", "jpeg", "png"],
+    )
+
     if ecg_file:
-        st.image(ecg_file, use_container_width=True)
-    # TODO: 'load test image' dropdown
+        st.image(
+            ecg_file,
+            caption="Uploaded ECG image",
+            use_container_width=True,
+        )
 
-if st.button("Predict", type="primary"):
-    ecg_path = None
-    if ecg_file:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-            tmp.write(ecg_file.getvalue())
-            ecg_path = tmp.name
-    try:
-        result = predict(lab_values=lab_values if use_labs and features else None,
-                         ecg_image_path=ecg_path)
-    except (NotImplementedError, FileNotFoundError) as exc:
-        st.warning(f"Model not available yet: {exc}")
-    except ValueError as exc:
-        st.error(str(exc))
+
+# --------------------------------------------------
+# PREDICTION
+# --------------------------------------------------
+
+st.write("")
+
+if st.button("Run Cardiovascular Analysis", type="primary",
+             use_container_width=True):
+
+    selected_labs = (
+        lab_values
+        if use_labs and features
+        else None
+    )
+
+    if selected_labs is None and ecg_file is None:
+        st.warning("Enter patient measurements or upload an ECG image.")
+
     else:
-        st.metric("Probability of CAD", f"{result.probability:.0%}", result.category)
-        st.caption("The lab part predicts heart disease in general and is used as a "
-                   "stand-in for CAD (the lab data has no CAD label). Combined lab + ECG "
-                   "results are not validated yet.")
-        lab_prob = result.branch_probabilities.get("tabular")
-        if lab_prob is not None:
-            threshold = tabular_threshold()
-            if threshold is not None:
-                flag = "above" if lab_prob >= threshold else "below"
-                st.caption(f"Lab result {lab_prob:.0%} is {flag} the lab model's decision "
-                           f"threshold ({threshold:.0%}). Risk categories are placeholders "
-                           "until they are agreed.")
-        if show_branches:
-            st.json(result.branch_probabilities)
-        if explain_labs and lab_prob is not None:
-            from cad_hybrid.explain.shap_tabular import plot_patient
+        ecg_path = None
 
-            with st.spinner("Explaining the lab result..."):
-                try:
-                    explanation = explain_tabular(lab_values)
-                except ValueError as exc:
-                    st.warning(f"No explanation: {exc}")
+        try:
+            if ecg_file is not None:
+                suffix = Path(ecg_file.name).suffix or ".png"
+
+                with tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=suffix,
+                ) as tmp:
+                    tmp.write(ecg_file.getvalue())
+                    ecg_path = tmp.name
+
+            with st.spinner("Analyzing the available inputs..."):
+
+                result = predict(
+                    lab_values=selected_labs,
+                    ecg_image_path=ecg_path,
+                )
+
+            # --------------------------------------
+            # RESULTS
+            # --------------------------------------
+
+            st.divider()
+            st.subheader("03. Prediction Results")
+
+            result_lab, result_ecg = st.columns(2, gap="large")
+
+            with result_lab:
+                st.markdown("""
+                <div class="result-panel">
+                    <div class="result-heading">
+                        TABULAR MODEL
+                    </div>
+                    <div class="section-title">
+                        General Heart Disease
+                    </div>
+                """, unsafe_allow_html=True)
+
+                if result.tabular_probability is not None:
+                    st.markdown(
+                        f'<div class="result-value">'
+                        f'{result.tabular_probability:.1%}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    threshold = tabular_threshold()
+
+                    if threshold is not None:
+                        st.caption(
+                            f"Model decision threshold: {threshold:.1%}"
+                        )
                 else:
-                    st.pyplot(plot_patient(explanation))
-                    st.caption("Each bar: how much that value moved this patient's risk away "
-                               "from the average patient. Describes the model, not causes "
-                               "of disease; blank fields use the training median.")
-        # TODO: Grad-CAM overlay (ECG)
+                    st.info("Tabular prediction was not requested.")
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            with result_ecg:
+                st.markdown("""
+                <div class="result-panel">
+                    <div class="result-heading">
+                        ECG MODEL
+                    </div>
+                    <div class="section-title">
+                        ECG-based CAD Prediction
+                    </div>
+                """, unsafe_allow_html=True)
+
+                if result.cad_probability is not None:
+                    st.markdown(
+                        f'<div class="result-value">'
+                        f'{result.cad_probability:.1%}</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.info("ECG prediction was not requested.")
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            # --------------------------------------
+            # EXPLANATION
+            # --------------------------------------
+
+            st.markdown("""
+            <div class="helper-box">
+                <b>Important distinction:</b><br>
+                The tabular model predicts general heart disease.
+                The ECG model predicts CAD. These are independent
+                model outputs and are not combined into one score.
+                The predictions are intended for research use only.
+            </div>
+            """, unsafe_allow_html=True)
+
+            if explain_labs and selected_labs is not None:
+                st.divider()
+                st.subheader("Tabular Model Explanation")
+
+                from cad_hybrid.explain.shap_tabular import plot_patient
+
+                with st.spinner("Generating SHAP explanation..."):
+                    explanation = explain_tabular(selected_labs)
+
+                st.pyplot(plot_patient(explanation))
+
+        except (ValueError, FileNotFoundError, NotImplementedError) as error:
+            st.error(f"Prediction could not be completed: {error}")
+
+        except Exception as error:
+            st.error(f"Unexpected prediction error: {error}")
+
+        finally:
+            if ecg_path and Path(ecg_path).exists():
+                Path(ecg_path).unlink()
+
+
+# --------------------------------------------------
+# FOOTER
+# --------------------------------------------------
+
+st.markdown("""
+<div class="footer">
+    CARDIOPREDICT · MACHINE LEARNING RESEARCH PROTOTYPE<br>
+    Independent ECG and tabular model predictions · Research use only
+</div>
+""", unsafe_allow_html=True)

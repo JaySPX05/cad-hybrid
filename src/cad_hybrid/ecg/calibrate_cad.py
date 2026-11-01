@@ -1,79 +1,216 @@
-
-import json
 from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
-import torch
-from sklearn.linear_model import LogisticRegression
 
-from src.predict_ecg import load_models, preprocess_image
-from src.model_config import DEVICE
+from sklearn.base import clone
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedGroupKFold
+
 
 ROOT = Path(__file__).resolve().parents[3]
+
+ORIGINAL_ROOT = ROOT.parent / "ecg-model"
+
+TRAIN_FEATURES = ORIGINAL_ROOT / "data" / "features" / "train_features.npz"
+VALIDATION_FEATURES = ORIGINAL_ROOT / "data" / "features" / "validation_features.npz"
 VALIDATION_CSV = ROOT / "data" / "processed" / "validation.csv"
-MODEL_PATH = ROOT / "models" / "ecg_calibrated_classifier.pkl"
-CALIBRATOR_PATH = ROOT / "models" / "cad_platt_calibrator.pkl"
+
+SVM_PATH = ORIGINAL_ROOT / "models" / "ecg_svm_classifier.pkl"
+OUTPUT_PATH = ROOT / "models" / "ecg_calibration_bundle.pkl"
+
+RANDOM_STATE = 42
+N_SPLITS = 5
+
 
 def main():
-    df = pd.read_csv(VALIDATION_CSV)
+    print("Loading training features...")
 
-    # Exclude arrhythmia; retain CAD and normal only.
-    df = df[df["label"].isin(["cad_positive", "negative"])].copy()
-    y = (df["label"] == "cad_positive").astype(int).to_numpy()
+    train = np.load(TRAIN_FEATURES)
+    X_train = train["X"]
+    y_train = train["y"].astype(int)
+    groups_train = train["groups"].astype(str)
 
-    feature_model, classifier = load_models()
-    feature_model.eval()
+    print("Training feature shape:", X_train.shape)
+    print("Training groups:", len(np.unique(groups_train)))
 
-    features = []
+    print("\nLoading original trained SVM...")
+    svm_model = joblib.load(SVM_PATH)
 
-    print(f"Validation images for calibration: {len(df)}")
+    print("SVM classes:", svm_model.classes_)
 
-    with torch.no_grad():
-        for i, path in enumerate(df["path"]):
-            image = preprocess_image(path)
+    # Generate out-of-fold decision scores.
+    print("\nGenerating group-aware out-of-fold scores...")
 
-            if not isinstance(image, torch.Tensor):
-                image = torch.as_tensor(image)
+    cv = StratifiedGroupKFold(
+        n_splits=N_SPLITS,
+        shuffle=True,
+        random_state=RANDOM_STATE
+    )
 
-            if image.ndim == 3:
-                image = image.unsqueeze(0)
+    oof_scores = np.zeros((len(y_train), 3))
+    assigned = np.zeros(len(y_train), dtype=bool)
 
-            image = image.to(DEVICE)
-            output = feature_model(image)
-            features.append(output.detach().cpu().numpy().reshape(-1))
+    for fold, (train_idx, valid_idx) in enumerate(
+        cv.split(X_train, y_train, groups_train), start=1
+    ):
+        fold_model = clone(svm_model)
 
-            if (i + 1) % 20 == 0:
-                print(f"Processed {i + 1}/{len(df)}")
+        fold_model.fit(X_train[train_idx], y_train[train_idx])
 
-    X = np.vstack(features)
+        scores = fold_model.decision_function(X_train[valid_idx])
 
-    # Existing three-class classifier; no retraining.
-    probabilities = classifier.predict_proba(X)
-    classes = list(classifier.classes_)
+        oof_scores[valid_idx] = scores
+        assigned[valid_idx] = True
 
-    p_cad = probabilities[:, classes.index(0)]
-    p_normal = probabilities[:, classes.index(1)]
+        print(
+            f"Fold {fold}/{N_SPLITS}: "
+            f"training={len(train_idx)}, validation={len(valid_idx)}"
+        )
 
-    # Binary CAD-vs-normal score.
-    score = p_cad / (p_cad + p_normal)
+    if not assigned.all():
+        raise RuntimeError("Some training samples did not receive OOF scores.")
 
-    # Platt calibration on the validation set.
+    print("\nFitting multiclass calibration on OOF scores...")
+
+    # Give each duplicate group equal total weight.
+    _, inverse, counts = np.unique(
+        groups_train, return_inverse=True, return_counts=True
+    )
+    sample_weights = 1.0 / counts[inverse]
+
+    multiclass_calibrator = LogisticRegression(
+        C=1.0,
+        max_iter=2000
+    )
+
+    multiclass_calibrator.fit(
+        oof_scores,
+        y_train,
+        sample_weight=sample_weights
+    )
+
+    # Load validation features.
+    print("\nLoading validation features...")
+
+    validation = np.load(VALIDATION_FEATURES)
+
+    X_validation = validation["X"]
+    groups_validation = validation["groups"].astype(str)
+
+    validation_df = pd.read_csv(VALIDATION_CSV)
+
+    validation_df["dup_group"] = (
+        validation_df["dup_group"].astype(str)
+    )
+
+    # Check group labels.
+    label_map = {
+        "cad_positive": 0,
+        "negative": 1,
+        "arrhythmia": 2
+    }
+
+    validation_df["numeric_label"] = (
+        validation_df["label"].map(label_map)
+    )
+
+    if validation_df["numeric_label"].isna().any():
+        raise ValueError("Unknown validation labels found.")
+
+    group_labels = (
+        validation_df.groupby("dup_group")["numeric_label"]
+        .first()
+        .to_dict()
+    )
+
+    # Select one feature vector per duplicate group.
+    selected_indices = []
+    selected_groups = []
+    seen_groups = set()
+
+    for index, group in enumerate(groups_validation):
+        if group not in seen_groups:
+            seen_groups.add(group)
+            selected_indices.append(index)
+            selected_groups.append(group)
+
+    X_selected = X_validation[selected_indices]
+
+    y_selected = np.array(
+        [group_labels[group] for group in selected_groups],
+        dtype=int
+    )
+
+    # Exclude arrhythmia from binary CAD calibration.
+    binary_mask = y_selected != 2
+
+    X_binary = X_selected[binary_mask]
+    y_binary = (y_selected[binary_mask] == 0).astype(int)
+
+    print("Validation groups:", len(selected_groups))
+    print("CAD groups:", int(y_binary.sum()))
+    print("Normal groups:", int((y_binary == 0).sum()))
+
+    # Use the unchanged final SVM to produce validation scores.
+    print("\nCalculating validation probabilities...")
+
+    final_decision_scores = svm_model.decision_function(X_binary)
+
+    validation_probabilities = multiclass_calibrator.predict_proba(
+        final_decision_scores
+    )
+
+    classes = list(multiclass_calibrator.classes_)
+
+    p_cad = validation_probabilities[:, classes.index(0)]
+    p_normal = validation_probabilities[:, classes.index(1)]
+
+    denominator = p_cad + p_normal
+
+    if np.any(denominator <= 0):
+        raise ValueError("Invalid CAD/normal probability denominator.")
+
+    cad_score = p_cad / denominator
+
     eps = 1e-7
-    score = np.clip(score, eps, 1 - eps)
-    score_logit = np.log(score / (1 - score)).reshape(-1, 1)
+    cad_score = np.clip(cad_score, eps, 1 - eps)
 
-    calibrator = LogisticRegression(C=1e6, solver="lbfgs")
-    calibrator.fit(score_logit, y)
+    cad_logit = np.log(cad_score / (1 - cad_score)).reshape(-1, 1)
 
+    print("\nFitting binary Platt calibrator...")
+
+    binary_calibrator = LogisticRegression(
+        C=1.0,
+        solver="lbfgs",
+        max_iter=2000
+    )
+
+    binary_calibrator.fit(cad_logit, y_binary)
+
+    # Save both calibration layers.
     ROOT.joinpath("models").mkdir(exist_ok=True)
-    joblib.dump(calibrator, CALIBRATOR_PATH)
+
+    bundle = {
+        "multiclass_calibrator": multiclass_calibrator,
+        "binary_calibrator": binary_calibrator,
+        "label_mapping": {
+            0: "cad_positive",
+            1: "negative",
+            2: "arrhythmia"
+        },
+        "binary_score": "P(CAD) / (P(CAD) + P(normal))",
+        "calibration_method": "Group-aware OOF multiclass + binary Platt",
+        "validation_unit": "one image per duplicate group",
+        "training_splits": N_SPLITS
+    }
+
+    joblib.dump(bundle, OUTPUT_PATH)
 
     print("\nCalibration completed successfully.")
-    print("CAD validation images:", int(y.sum()))
-    print("Normal validation images:", int((y == 0).sum()))
-    print("Calibrator saved to:", CALIBRATOR_PATH)
+    print("Saved to:", OUTPUT_PATH)
+
 
 if __name__ == "__main__":
     main()

@@ -17,7 +17,8 @@ data:
       "Abnormal Heartbeat": arrhythmia
     ecg_bhopal_in: {}
 
-  classes: [negative, cad_positive, arrhythmia]
+  # Numeric class order used by the existing SVM
+  classes: [cad_positive, negative, arrhythmia]
 
   processed_splits:
     train: data/processed/train.csv
@@ -25,9 +26,9 @@ data:
     test: data/processed/test.csv
 
 preprocess:
-  image_size: 512
+  image_size: 224
   grayscale: false
-  crop_to_trace_area: true
+  crop_to_trace_area: false
   deskew: true
   augment:
     rotation_degrees: 3
@@ -37,33 +38,15 @@ preprocess:
     horizontal_flip: false
     vertical_flip: false
 
-dedupe:
-  hash: phash
-  max_hamming_distance: 4
-
 model:
-  backbone: efficientnet_b0
+  backbone: resnet18
   pretrained: imagenet
-  stage1:
-    epochs: 10
-    lr: 1.0e-3
-  stage2:
-    epochs: 20
-    lr: 1.0e-4
-    unfreeze_last_n_blocks: 2
-  batch_size: 16
-  early_stopping_patience: 5
-
-  classifier: CalibratedClassifierCV
-  classifier_path: models/ecg_calibrated_classifier.pkl
-
-embed_gbm:
-  enabled: true
-  head: xgboost
+  classifier: SVC
+  classifier_path: models/ecg_svm_classifier.pkl
 
 calibration:
-  method: platt_sigmoid
-  path: models/cad_platt_calibrator.pkl
+  method: group_aware_oof_multiclass_binary_platt
+  path: models/ecg_calibration_bundle.pkl
 
 prediction:
   binary_score: "P(CAD) / (P(CAD) + P(normal))"

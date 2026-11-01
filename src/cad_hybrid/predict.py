@@ -1,8 +1,15 @@
-"""One prediction interface used by the evaluation scripts, the Streamlit app and any
-future API, so everything scores the same way.
+
+"""Independent prediction interface for the ECG and tabular branches.
 
 Usage:
-    result = predict(lab_values={"age": 54, ...}, ecg_image_path="ecg.jpg")
+    result = predict(
+        lab_values={"age": 54, ...},
+        ecg_image_path="ecg.jpg"
+    )
+
+The tabular branch predicts general heart disease.
+The ECG branch predicts CAD.
+The two probabilities are returned separately.
 """
 
 from __future__ import annotations
@@ -12,110 +19,117 @@ from pathlib import Path
 
 import yaml
 
-from .fusion.fuse import fuse, risk_category
 from .tabular.artifact import DEFAULT_PATH as TABULAR_MODEL_PATH
-from .tabular.artifact import check_completeness, load_artifact, predict_calibrated, to_frame
+from .tabular.artifact import (
+    check_completeness,
+    load_artifact,
+    predict_calibrated,
+    to_frame,
+)
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
 
 
 @dataclass
 class Prediction:
-    probability: float
-    category: str
-    branch_probabilities: dict[str, float | None] = field(default_factory=dict)
+    """Independent predictions from available model branches."""
+
+    tabular_probability: float | None = None
+    cad_probability: float | None = None
+    branch_probabilities: dict[str, float | None] = field(
+        default_factory=dict
+    )
 
 
 def load_config(name: str) -> dict:
-    with open(CONFIG_DIR / f"{name}.yaml") as f:
+    """Load a YAML configuration file."""
+
+    with open(CONFIG_DIR / f"{name}.yaml", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-def predict_tabular(lab_values: dict, model_path: Path | str = TABULAR_MODEL_PATH) -> float:
-    """Calibrated probability of heart disease from one patient's lab values.
+def predict_tabular(
+    lab_values: dict,
+    model_path: Path | str = TABULAR_MODEL_PATH
+) -> float:
+    """Return calibrated general heart disease probability."""
 
-    ``lab_values`` uses the shared-schema names from ``configs/tabular.yaml``
-    (e.g. ``{"age": 54, "sex_male": 1, "ldl": 150}``). Fields may be left out, up to
-    ``final.max_missing_features`` (out-of-range values count as missing); more raises
-    ValueError, as do unknown field names and values that aren't numbers.
-
-    The model is trained by ``scripts/train_tabular.py`` and saved to
-    ``models/tabular/lab_model.joblib``; FileNotFoundError if it hasn't been trained.
-    """
     artifact = load_artifact(str(model_path))
     X = to_frame(lab_values, artifact["features"])
-    check_completeness(artifact, X)  # ValueError if too many fields are blank
+    check_completeness(artifact, X)
+
     return float(predict_calibrated(artifact, X)[0])
 
 
-def tabular_threshold(model_path: Path | str = TABULAR_MODEL_PATH) -> float | None:
-    """Decision threshold stored with the lab model: probabilities at or above it are
-    flagged "heart disease likely". None if the model was saved without one.
+def tabular_threshold(
+    model_path: Path | str = TABULAR_MODEL_PATH
+) -> float | None:
+    """Return the decision threshold stored with the tabular model."""
 
-    It applies to ``predict_tabular()``'s probability only, not to the fused probability.
-    """
     return load_artifact(str(model_path)).get("threshold")
 
 
-def explain_tabular(lab_values: dict, model_path: Path | str = TABULAR_MODEL_PATH,
-                    nsamples: int | None = None) -> dict:
-    """Which lab values pushed this patient's probability up or down (SHAP).
+def explain_tabular(
+    lab_values: dict,
+    model_path: Path | str = TABULAR_MODEL_PATH,
+    nsamples: int | None = None
+) -> dict:
+    """Explain the tabular prediction using SHAP."""
 
-    Returns ``{"baseline", "probability", "contributions"}``; contributions is a
-    DataFrame (feature, value, contribution, given), largest effect first, and
-    ``baseline + sum(contributions) == probability``. Slow with TabICL on CPU.
-    """
     from .explain.shap_tabular import explain_patient
 
     artifact = load_artifact(str(model_path))
     X = to_frame(lab_values, artifact["features"])
     check_completeness(artifact, X)
+
     return explain_patient(artifact, X, nsamples)
 
 
 def predict_ecg(image_path: str) -> float:
-    """Calibrated CAD probability from an ECG image.
+    """Return calibrated CAD probability from an ECG image."""
 
-    TODO: load the trained ECG model + calibrator from ``models/`` and score.
+    from .ecg.predict import predict_ecg as predict_ecg_details
+
+    result = predict_ecg_details(image_path)
+
+    return float(result["cad_probability"])
+
+
+def predict(
+    lab_values: dict | None = None,
+    ecg_image_path: str | None = None,
+    tabular_model_path: Path | str = TABULAR_MODEL_PATH,
+) -> Prediction:
+    """Return independent tabular and ECG predictions.
+
+    No combined probability is calculated because the tabular model
+    predicts general heart disease, whereas the ECG model predicts CAD.
     """
-    raise NotImplementedError("ECG model not trained yet")
 
-
-def fusion_priors(cfg: dict, tabular_model_path: Path | str = TABULAR_MODEL_PATH
-                  ) -> tuple[dict, float]:
-    """Each branch's training positive rate, and the target prior, from the fusion config.
-
-    A null tabular prior or target prior means "the saved lab model's training positive
-    rate", read from the model's metadata.
-    """
-    priors = dict(cfg.get("branch_priors") or {})
-    try:
-        lab_rate = load_artifact(str(tabular_model_path))["metadata"].get("positive_rate")
-    except FileNotFoundError:
-        lab_rate = None
-    if priors.get("tabular") is None:
-        priors["tabular"] = lab_rate
-    target = cfg.get("target_prior")
-    if target is None:
-        target = lab_rate
-    if target is None:
-        raise ValueError("target_prior is null (= the lab model's training rate) but no lab "
-                         "model is saved; set target_prior in configs/fusion.yaml")
-    return priors, float(target)
-
-
-def predict(lab_values: dict | None = None, ecg_image_path: str | None = None,
-            tabular_model_path: Path | str = TABULAR_MODEL_PATH,
-            fusion_config: dict | None = None) -> Prediction:
-    """Score whatever inputs are available and fuse them."""
     if lab_values is None and ecg_image_path is None:
-        raise ValueError("Provide lab values, an ECG image, or both")
-    cfg = fusion_config or load_config("fusion")
+        raise ValueError(
+            "Provide lab values, an ECG image, or both"
+        )
+
+    tabular_probability = (
+        predict_tabular(lab_values, tabular_model_path)
+        if lab_values is not None
+        else None
+    )
+
+    cad_probability = (
+        predict_ecg(ecg_image_path)
+        if ecg_image_path is not None
+        else None
+    )
+
     branches = {
-        "tabular": (predict_tabular(lab_values, tabular_model_path)
-                    if lab_values is not None else None),
-        "ecg": predict_ecg(ecg_image_path) if ecg_image_path is not None else None,
+        "tabular": tabular_probability,
+        "ecg": cad_probability,
     }
-    priors, target = fusion_priors(cfg, tabular_model_path)
-    prob = fuse(branches, priors, target, weights=cfg.get("branch_weights"))
-    return Prediction(prob, risk_category(prob, cfg["risk_categories"]), branches)
+
+    return Prediction(
+        tabular_probability=tabular_probability,
+        cad_probability=cad_probability,
+        branch_probabilities=branches,
+    )

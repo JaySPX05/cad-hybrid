@@ -1,29 +1,17 @@
-# Fusion configuration (src/cad_hybrid/fusion/fuse.py).
-# Target: CAD. The ECG branch predicts CAD (MI or history of MI vs normal); the lab
-# branch predicts heart disease in general, used as a stand-in for CAD because the lab
-# data has no CAD label. See the Project doc claude/fusion-integration-plan.md.
 
-# How common CAD is among the people the result is meant for. A product decision
-# (screening vs hospital patients). null = use the lab model's training positive rate
-# (0.565 for the current model), so a lab-only result equals predict_tabular() and the
-# lab decision threshold still applies.
+# Fusion configuration (src/cad_hybrid/fusion/fuse.py).
+# Target: CAD.
+
 target_prior: null
 
-# Each branch's training positive rate: what its probabilities were calibrated on.
-# null for tabular = read it from the saved lab model. The ECG branch must set it once
-# its model exists (CAD / (CAD + normal) among training ECGs).
 branch_priors:
   tabular: null
-  ecg: null
+  ecg: 0.5899581589958159
 
-# 1.0 each = naive-Bayes assumption (independent evidence given disease status).
-# Can't be learned or checked until there are patients with both labs and an ECG.
 branch_weights:
   tabular: 1.0
   ecg: 1.0
 
-# Cut-offs on the fused probability. Placeholders: screening-style values that don't
-# fit a hospital-level prior; to be decided together (e.g. based on the lab threshold).
 risk_categories:
   low: [0.0, 0.10]
   moderate: [0.10, 0.20]

@@ -1,17 +1,17 @@
 {
-    "test_images": 37,
-    "cad_positive": 17,
+    "test_images": 35,
+    "cad_positive": 15,
     "normal": 20,
     "threshold": 0.5,
     "metrics": {
-        "auroc": 0.9500000000000001,
+        "auroc": 0.9766666666666666,
         "sensitivity": 1.0,
-        "specificity": 0.85,
-        "brier_score": 0.08108108066592833
+        "specificity": 0.9,
+        "brier_score": 0.04559811688083891
     },
     "bootstrap_95_ci": {
         "auroc": [
-            0.875,
+            0.91,
             1.0
         ],
         "sensitivity": [
@@ -19,12 +19,12 @@
             1.0
         ],
         "specificity": [
-            0.6666666666666666,
+            0.7272727272727273,
             1.0
         ],
         "brier_score": [
-            4.639679924184717e-19,
-            0.1891891879437309
+            0.004533339227472881,
+            0.11884835580497442
         ]
     },
     "bootstrap_iterations": 1000
