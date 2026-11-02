@@ -1,0 +1,40 @@
+{
+    "unit": "one image per duplicate group, CAD vs normal only",
+    "validation_ecgs": 44,
+    "test_ecgs": 35,
+    "test_cad_positive": 15,
+    "test_normal": 20,
+    "threshold": 0.13204347080302561,
+    "threshold_method": "youden, chosen on validation",
+    "metrics": {
+        "auroc": 0.9766666666666666,
+        "sensitivity": 1.0,
+        "specificity": 0.8,
+        "brier_score": 0.045599075677462256
+    },
+    "bootstrap_95_ci": {
+        "auroc": [
+            0.91,
+            1.0
+        ],
+        "sensitivity": [
+            1.0,
+            1.0
+        ],
+        "specificity": [
+            0.6110119047619048,
+            0.9545454545454546
+        ],
+        "brier_score": [
+            0.004532991818547771,
+            0.11885079129558734
+        ]
+    },
+    "bootstrap_iterations": 1000,
+    "at_fixed_0_5": {
+        "auroc": 0.9766666666666666,
+        "sensitivity": 1.0,
+        "specificity": 0.9,
+        "brier_score": 0.045599075677462256
+    }
+}
