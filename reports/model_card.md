@@ -20,7 +20,7 @@ South Asian data only (India, Pakistan, Bangladesh). See `data/data_register.csv
 |---|---|---|---|
 | Northern Bangladesh cardiac patients (Zia Heart Foundation) | Bangladesh | Lab branch training and cross-validation | 1,035 adults (585 with heart disease) |
 | Mendeley Cardiovascular_Disease_Dataset | India | Lab branch pipeline check only (failed the audit) | 1,000 |
-| ECG images of cardiac patients (Multan) | Pakistan | ECG branch training | TODO |
+| ECG images of cardiac patients (Multan) | Pakistan | ECG branch training, validation and test | 928 images, 491 unique ECGs (CAD 116, normal 142, arrhythmia 233) |
 | ECG images for MI complication (Bhopal) | India | ECG branch external test | TODO |
 
 ## Evaluation

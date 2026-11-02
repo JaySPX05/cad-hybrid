@@ -427,7 +427,10 @@ if st.button(
                             "arrhythmia probability. This is a "
                             "research-model estimate, not a clinical "
                             "diagnosis. Please consult a qualified "
-                            "healthcare professional for interpretation."
+                            "healthcare professional for interpretation. "
+                            "A high arrhythmia score means the CAD score may "
+                            "be unreliable; CAD ECGs are sometimes classified "
+                            "as arrhythmia by this model."
                         )
 
                     else:
@@ -442,16 +445,38 @@ if st.button(
                 st.markdown("</div>", unsafe_allow_html=True)
 
             # --------------------------------------
+            # COMBINED CAD RESULT (EXPERIMENTAL)
+            # --------------------------------------
+
+            if result.fused_probability is not None:
+                st.divider()
+                st.markdown("**Combined CAD probability (experimental)**")
+                st.metric(
+                    label="Labs and ECG combined",
+                    value=f"{result.fused_probability:.1%}",
+                    delta=result.category,
+                    delta_color="off",
+                )
+                st.caption(
+                    "Each available branch is converted using its own training "
+                    "rate and combined (configs/fusion.yaml). The lab part predicts "
+                    "heart disease in general and stands in for CAD. Not validated: "
+                    "no dataset has labs and ECGs for the same patients, and the risk "
+                    "categories are placeholders."
+                )
+
+            # --------------------------------------
             # EXPLANATION
             # --------------------------------------
 
             st.markdown("""
             <div class="helper-box">
                 <b>Important distinction:</b><br>
-                The tabular model predicts general heart disease.
-                The ECG model provides separate CAD and arrhythmia
-                probabilities. These outputs are not combined into
-                one score. The predictions are intended for research
+                The tabular model predicts general heart disease, used as a
+                stand-in for CAD. The ECG model predicts CAD (MI or history of
+                MI vs normal) and, separately, arrhythmia. The combined CAD
+                probability uses the lab and ECG CAD results; arrhythmia is
+                not part of it. The predictions are intended for research
                 use only and are not a substitute for clinical assessment.
             </div>
             """, unsafe_allow_html=True)
