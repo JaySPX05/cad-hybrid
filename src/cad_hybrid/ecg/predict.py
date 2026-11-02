@@ -2,11 +2,11 @@
 from pathlib import Path
 
 import joblib
-import numpy as np
 import torch
 
 from .feature_extractor import create_feature_extractor
 from .preprocess import preprocess_image
+from .scoring import ARRHYTHMIA, apply_binary_calibrator, cad_vs_normal_score
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -73,34 +73,11 @@ def predict_ecg(image_path):
     )[0]
 
     classes = list(multiclass_calibrator.classes_)
+    p_arrhythmia = float(probabilities[classes.index(ARRHYTHMIA)])
 
-    p_cad = float(probabilities[classes.index(0)])
-    p_normal = float(probabilities[classes.index(1)])
-    p_arrhythmia = float(probabilities[classes.index(2)])
-
-    denominator = p_cad + p_normal
-
-    if denominator <= 0:
-        raise ValueError(
-            "CAD and normal probabilities sum to zero."
-        )
-
-    # CAD vs normal score; arrhythmia is excluded.
-    binary_score = p_cad / denominator
-    binary_score = np.clip(binary_score, 1e-7, 1 - 1e-7)
-
-    score_logit = np.log(
-        binary_score / (1 - binary_score)
-    )
-
-    # Apply binary Platt calibration.
-    positive_index = list(binary_calibrator.classes_).index(1)
-
-    calibrated_cad = float(
-        binary_calibrator.predict_proba(
-            [[score_logit]]
-        )[0, positive_index]
-    )
+    # CAD vs normal score (arrhythmia excluded), then binary Platt calibration.
+    binary_score = cad_vs_normal_score(probabilities, classes)
+    calibrated_cad = float(apply_binary_calibrator(binary_calibrator, binary_score)[0])
 
     return {
         "cad_probability": calibrated_cad,

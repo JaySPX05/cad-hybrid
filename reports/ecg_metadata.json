@@ -1,21 +1,30 @@
-
 {
-  "training_positive_rate": 0.5899581589958159,
-  "positive_rate_unit": "image_level_cad_vs_normal_only",
-  "training_cad_images": 282,
-  "training_normal_images": 196,
-  "training_arrhythmia_images": 160,
-  "label_mapping": {
-    "0": "cad_positive",
-    "1": "negative",
-    "2": "arrhythmia"
-  },
-  "base_classifier": "StandardScaler + RBF SVC",
-  "feature_extractor": "ResNet18 pretrained on ImageNet",
-  "calibration_method": "Group-aware OOF multiclass logistic calibration followed by binary Platt calibration",
-  "calibration_bundle": "models/ecg_calibration_bundle.pkl",
-  "calibration_validation_unit": "One feature vector per duplicate group",
-  "binary_score": "P(CAD) / (P(CAD) + P(normal))",
-  "arrhythmia_handling": "Excluded from binary CAD calibration; probability returned separately",
-  "model_retrained": false
+    "fusion_prior": 0.4545,
+    "fusion_prior_source": "CAD rate of the calibration (validation) set, one ECG per duplicate group",
+    "calibration_set": {
+        "cad_ecgs": 20,
+        "normal_ecgs": 24,
+        "positive_rate": 0.45454545454545453
+    },
+    "training_set": {
+        "cad_ecgs": 81,
+        "normal_ecgs": 98,
+        "positive_rate": 0.45251396648044695
+    },
+    "training_images": {
+        "cad_positive": 282,
+        "negative": 196,
+        "arrhythmia": 160
+    },
+    "label_mapping": {
+        "0": "cad_positive",
+        "1": "negative",
+        "2": "arrhythmia"
+    },
+    "feature_extractor": "ResNet18 pretrained on ImageNet (frozen)",
+    "base_classifier": "StandardScaler + RBF SVC, trained by scripts/train_ecg.py (group-aware 5-fold CV on the training split)",
+    "calibration_method": "Group-aware OOF multiclass logistic calibration, then binary Platt calibration on validation CAD + normal ECGs",
+    "calibration_bundle": "models/ecg_calibration_bundle.pkl",
+    "binary_score": "P(CAD) / (P(CAD) + P(normal))",
+    "arrhythmia_handling": "Excluded from the CAD score and from fusion; returned separately"
 }

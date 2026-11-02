@@ -9,6 +9,8 @@ from sklearn.base import clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedGroupKFold
 
+from cad_hybrid.ecg.scoring import cad_vs_normal_score, fit_binary_calibrator
+
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -223,40 +225,19 @@ def main():
         final_decision_scores
     )
 
-    classes = list(multiclass_calibrator.classes_)
-
-    p_cad = validation_probabilities[:, classes.index(0)]
-    p_normal = validation_probabilities[:, classes.index(1)]
-
-    denominator = p_cad + p_normal
-
-    if np.any(denominator <= 0):
-        raise ValueError(
-            "Invalid CAD/normal probability denominator."
-        )
-
-    # CAD score = P(CAD) / (P(CAD) + P(normal)).
-    cad_score = p_cad / denominator
-
-    eps = 1e-7
-    cad_score = np.clip(cad_score, eps, 1 - eps)
-
-    cad_logit = np.log(
-        cad_score / (1 - cad_score)
-    ).reshape(-1, 1)
+    # CAD score = P(CAD) / (P(CAD) + P(normal)), then binary Platt calibration.
+    cad_score = cad_vs_normal_score(
+        validation_probabilities, multiclass_calibrator.classes_
+    )
 
     print("\nFitting binary Platt calibrator...")
 
-    binary_calibrator = LogisticRegression(
-        C=1.0,
-        solver="lbfgs",
-        max_iter=2000
-    )
+    binary_calibrator = fit_binary_calibrator(cad_score, y_binary)
 
-    binary_calibrator.fit(
-        cad_logit,
-        y_binary
-    )
+    # The calibrated probabilities reflect this CAD rate (one ECG per group);
+    # fusion needs it as the ECG branch prior (configs/fusion.yaml).
+    calibration_positive_rate = float(y_binary.mean())
+    print(f"Calibration CAD rate (fusion prior): {calibration_positive_rate:.4f}")
 
     # Save both calibration layers locally.
     OUTPUT_PATH.parent.mkdir(
@@ -275,6 +256,7 @@ def main():
         "binary_score": "P(CAD) / (P(CAD) + P(normal))",
         "calibration_method": "Group-aware OOF multiclass + binary Platt",
         "validation_unit": "one image per duplicate group",
+        "calibration_positive_rate": calibration_positive_rate,
         "training_splits": N_SPLITS
     }
 

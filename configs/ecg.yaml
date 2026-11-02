@@ -1,57 +1,66 @@
-
-# ECG image branch configuration
+# ECG (image) branch configuration.
+# Frozen ImageNet ResNet18 features -> RBF SVM (3 classes) -> calibrated CAD-vs-normal score.
 
 seed: 42
 
 data:
   train_sources:
-    - ecg_multan_pk
+    - ecg_multan_pk             # Pakistan
   external_test_sources:
-    - ecg_bhopal_in
-
+    - ecg_bhopal_in             # India: Pakistan -> India cross-country test
+  # Map each dataset's original class names to our labels.
   label_map:
     ecg_multan_pk:
       "Myocardial Infarction": cad_positive
       "History of MI": cad_positive
       "Normal": negative
-      "Abnormal Heartbeat": arrhythmia
-    ecg_bhopal_in: {}
+      "Abnormal Heartbeat": arrhythmia   # kept separate: arrhythmia is not CAD
+    ecg_bhopal_in: {}                    # TODO before the external test
 
-  # Numeric class order used by the existing SVM
+  # Numeric class order used by the SVM (0, 1, 2)
   classes: [cad_positive, negative, arrhythmia]
 
+  # Fixed split from the original ECG project, recorded in reports/split_manifest.csv
+  # and checked by scripts/verify_splits.py (no duplicate group in two splits).
   processed_splits:
     train: data/processed/train.csv
     validation: data/processed/validation.csv
     test: data/processed/test.csv
 
 preprocess:
-  image_size: 224
+  image_size: 224               # aspect-preserving resize + white padding
   grayscale: false
   crop_to_trace_area: false
-  deskew: true
-  augment:
+  deskew: true                  # small rotations only (0.2 to 3 degrees)
+  augment:                      # not used yet (features are extracted once)
     rotation_degrees: 3
     brightness: 0.15
     contrast: 0.15
     blur_prob: 0.2
-    horizontal_flip: false
+    horizontal_flip: false      # never flip: a mirrored ECG is not a valid ECG
     vertical_flip: false
+
+dedupe:
+  # Duplicate groups come from the original split. Near-duplicate check across splits:
+  # scripts/clean_phash_splits.py (dry run by default, --write to save cleaned splits).
+  hash: phash
+  max_hamming_distance: 4       # images closer than this are treated as near-duplicates
 
 model:
   backbone: resnet18
-  pretrained: imagenet
-  classifier: SVC
-  classifier_path: models/ecg_svm_classifier.pkl
+  pretrained: imagenet          # non-medical weights only (data rule)
+  frozen: true                  # features only; the CNN is not fine-tuned
+  classifier: SVC               # RBF, class_weight balanced, C/gamma by grouped CV
+  classifier_path: models/ecg_svm_classifier.pkl   # gitignored
 
 calibration:
   method: group_aware_oof_multiclass_binary_platt
-  path: models/ecg_calibration_bundle.pkl
+  path: models/ecg_calibration_bundle.pkl          # gitignored
 
 prediction:
-  binary_score: "P(CAD) / (P(CAD) + P(normal))"
-  arrhythmia_probability: separate
-  threshold: 0.5
+  binary_score: "P(CAD) / (P(CAD) + P(normal))"   # arrhythmia excluded
+  arrhythmia_probability: separate                 # shown as a warning, not fused
+  threshold: validation_youden  # chosen on validation by cad_hybrid.ecg.evaluate
 
 class_indices:
   "0": cad_positive

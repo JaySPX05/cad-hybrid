@@ -1,8 +1,13 @@
 
-"""Evaluate the ECG model on the held-out test set.
+"""Evaluate the ECG CAD score on the held-out test set.
 
 Usage:
     python -m cad_hybrid.ecg.evaluate
+
+CAD vs normal ECGs only, one image per duplicate group. The decision threshold is
+chosen on the validation set (Youden), never on the test set, then applied to test;
+results at a fixed 0.5 are reported alongside for comparison. Saved to
+reports/ecg_test_results.json.
 """
 
 import json
@@ -18,6 +23,8 @@ from sklearn.metrics import (
 )
 
 from cad_hybrid.ecg.predict import predict_ecg
+from cad_hybrid.ecg.scoring import cad_vs_normal
+from cad_hybrid.evaluation.thresholds import choose_threshold
 
 
 # =====================================================
@@ -27,22 +34,23 @@ from cad_hybrid.ecg.predict import predict_ecg
 ROOT = Path(__file__).resolve().parents[3]
 
 TEST_CSV = ROOT / "data" / "processed" / "test.csv"
+VALIDATION_CSV = ROOT / "data" / "processed" / "validation.csv"
 
-RESULTS_DIR = ROOT / "results"
+RESULTS_DIR = ROOT / "reports"
 
 RANDOM_STATE = 42
 N_BOOTSTRAP = 1000
-THRESHOLD = 0.5
+FIXED_THRESHOLD = 0.5
 
 
 # =====================================================
 # METRIC CALCULATION
 # =====================================================
 
-def calculate_metrics(y, scores):
-    """Calculate binary classification metrics."""
+def calculate_metrics(y, scores, threshold):
+    """Calculate binary classification metrics at a threshold."""
 
-    predictions = (scores >= THRESHOLD).astype(int)
+    predictions = (scores >= threshold).astype(int)
 
     tn, fp, fn, tp = confusion_matrix(
         y,
@@ -66,7 +74,7 @@ def calculate_metrics(y, scores):
 # BOOTSTRAP CONFIDENCE INTERVALS
 # =====================================================
 
-def bootstrap_ci(y, scores):
+def bootstrap_ci(y, scores, threshold):
     """Calculate 95% bootstrap confidence intervals."""
 
     rng = np.random.default_rng(RANDOM_STATE)
@@ -99,6 +107,7 @@ def bootstrap_ci(y, scores):
         metrics = calculate_metrics(
             y_sample,
             score_sample,
+            threshold,
         )
 
         for key, value in metrics.items():
@@ -120,169 +129,96 @@ def bootstrap_ci(y, scores):
 # MAIN EVALUATION
 # =====================================================
 
-def main():
+def load_split(csv_path):
+    """CAD and normal ECGs from a split, one image per duplicate group."""
 
-    if not TEST_CSV.exists():
-        raise FileNotFoundError(
-            f"Test CSV not found: {TEST_CSV}"
-        )
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Split CSV not found: {csv_path}")
 
-    df = pd.read_csv(TEST_CSV)
+    df = pd.read_csv(csv_path, dtype={"dup_group": str})
 
-    required_columns = {
-        "path",
-        "label",
-        "dup_group",
-    }
+    missing = {"path", "label", "dup_group"} - set(df.columns)
+    if missing:
+        raise ValueError(f"{csv_path.name} is missing columns: {sorted(missing)}")
 
-    missing_columns = required_columns - set(df.columns)
-
-    if missing_columns:
-        raise ValueError(
-            f"Missing required columns: {sorted(missing_columns)}"
-        )
-
-    # CAD versus normal only.
-    df = df[
-        df["label"].isin(
-            ["cad_positive", "negative"]
-        )
-    ].copy()
-
-    if df.empty:
-        raise ValueError(
-            "No CAD-positive or normal samples found in test CSV."
-        )
-
-    # One image per exact-duplicate group.
-    df = (
-        df.sort_values("path")
-        .drop_duplicates(
-            subset="dup_group",
-            keep="first",
-        )
-        .reset_index(drop=True)
-    )
-
-    y = (
-        df["label"] == "cad_positive"
-    ).astype(int).to_numpy()
+    df, y = cad_vs_normal(df)
 
     if len(np.unique(y)) < 2:
-        raise ValueError(
-            "Evaluation requires both CAD-positive and normal samples."
-        )
+        raise ValueError(f"{csv_path.name} needs both CAD and normal ECGs.")
+
+    return df, y
+
+
+def score_split(df, name):
+    """Calibrated P(CAD) for every image in the split."""
 
     scores = []
+    for i, path in enumerate(df["path"], start=1):
+        scores.append(float(predict_ecg(path)["cad_probability"]))
+        if i % 10 == 0 or i == len(df):
+            print(f"{name}: scored {i}/{len(df)}")
+
+    scores = np.asarray(scores, dtype=float)
+    if not np.all(np.isfinite(scores)) or np.any((scores < 0) | (scores > 1)):
+        raise ValueError("Model produced scores outside 0 to 1.")
+    return scores
+
+
+def main():
 
     print("=" * 50)
     print("ECG MODEL EVALUATION")
     print("=" * 50)
 
-    print("Test images:", len(df))
-    print("CAD-positive:", int(y.sum()))
-    print("Normal:", int((y == 0).sum()))
+    validation_df, y_validation = load_split(VALIDATION_CSV)
+    test_df, y_test = load_split(TEST_CSV)
 
-    # -----------------------------------------------
-    # PREDICTIONS
-    # -----------------------------------------------
+    print(f"Validation ECGs: {len(y_validation)} "
+          f"(CAD {int(y_validation.sum())}, normal {int((y_validation == 0).sum())})")
+    print(f"Test ECGs: {len(y_test)} "
+          f"(CAD {int(y_test.sum())}, normal {int((y_test == 0).sum())})")
 
-    for i, row in df.iterrows():
+    # Threshold chosen on validation only; the test set is not looked at.
+    validation_scores = score_split(validation_df, "validation")
+    threshold = choose_threshold(y_validation, validation_scores, "youden")
+    print(f"\nThreshold chosen on validation (Youden): {threshold:.4f}")
 
-        result = predict_ecg(row["path"])
+    test_scores = score_split(test_df, "test")
 
-        scores.append(
-            float(result["cad_probability"])
-        )
+    metrics = calculate_metrics(y_test, test_scores, threshold)
+    confidence_intervals = bootstrap_ci(y_test, test_scores, threshold)
+    fixed_metrics = calculate_metrics(y_test, test_scores, FIXED_THRESHOLD)
 
-        if (i + 1) % 10 == 0:
-            print(
-                f"Processed {i + 1}/{len(df)}"
-            )
-
-    scores = np.asarray(
-        scores,
-        dtype=float,
-    )
-
-    if not np.all(np.isfinite(scores)):
-        raise ValueError(
-            "Model produced invalid or non-finite prediction scores."
-        )
-
-    if np.any((scores < 0) | (scores > 1)):
-        raise ValueError(
-            "Prediction scores must be between 0 and 1."
-        )
-
-    # -----------------------------------------------
-    # METRICS
-    # -----------------------------------------------
-
-    metrics = calculate_metrics(
-        y,
-        scores,
-    )
-
-    confidence_intervals = bootstrap_ci(
-        y,
-        scores,
-    )
-
-    print("\nTEST RESULTS")
-
+    print("\nTEST RESULTS (validation-chosen threshold)")
     for name, value in metrics.items():
-        print(f"{name}: {value:.4f}")
+        interval = confidence_intervals.get(name)
+        ci = f"  ({interval[0]:.4f} - {interval[1]:.4f})" if interval else ""
+        print(f"{name}: {value:.4f}{ci}")
 
-    print("\nBOOTSTRAP 95% CONFIDENCE INTERVALS")
+    print(f"\nAt fixed {FIXED_THRESHOLD}: sensitivity "
+          f"{fixed_metrics['sensitivity']:.4f}, specificity {fixed_metrics['specificity']:.4f}")
 
-    for name, interval in confidence_intervals.items():
-
-        print(
-            f"{name}: "
-            f"{interval[0]:.4f} - {interval[1]:.4f}"
-        )
-
-    # -----------------------------------------------
-    # SAVE RESULTS
-    # -----------------------------------------------
-
-    RESULTS_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     output = {
-        "test_images": len(df),
-        "cad_positive": int(y.sum()),
-        "normal": int((y == 0).sum()),
-        "threshold": THRESHOLD,
-        "metrics": {
-            key: float(value)
-            for key, value in metrics.items()
-        },
+        "unit": "one image per duplicate group, CAD vs normal only",
+        "validation_ecgs": int(len(y_validation)),
+        "test_ecgs": int(len(y_test)),
+        "test_cad_positive": int(y_test.sum()),
+        "test_normal": int((y_test == 0).sum()),
+        "threshold": float(threshold),
+        "threshold_method": "youden, chosen on validation",
+        "metrics": {key: float(value) for key, value in metrics.items()},
         "bootstrap_95_ci": confidence_intervals,
         "bootstrap_iterations": N_BOOTSTRAP,
+        "at_fixed_0_5": {key: float(value) for key, value in fixed_metrics.items()},
     }
 
-    output_path = (
-        RESULTS_DIR / "ecg_test_results.json"
-    )
-
-    with open(
-        output_path,
-        "w",
-        encoding="utf-8",
-    ) as f:
-
-        json.dump(
-            output,
-            f,
-            indent=4,
-        )
+    output_path = RESULTS_DIR / "ecg_test_results.json"
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=4)
 
     print("\nResults saved to:", output_path)
-
     print("\nECG EVALUATION COMPLETED")
 
 
