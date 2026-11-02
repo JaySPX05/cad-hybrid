@@ -2,7 +2,7 @@
 """CardioPredict - ECG and Tabular Research Prototype.
 
 The tabular branch predicts general heart disease.
-The ECG branch predicts CAD.
+The ECG branch predicts CAD and arrhythmia probabilities.
 Both predictions are displayed independently.
 """
 
@@ -26,7 +26,7 @@ st.set_page_config(
     page_title="CardioPredict | Research Prototype",
     page_icon="❤️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded"
 )
 
 # --------------------------------------------------
@@ -214,6 +214,7 @@ try:
         tab_cfg["data"]["features"]["numeric"]
         + tab_cfg["data"]["features"]["categorical"]
     )
+
 except (FileNotFoundError, KeyError, TypeError) as error:
     st.error(f"Could not load tabular configuration: {error}")
     st.stop()
@@ -229,7 +230,7 @@ with st.sidebar:
     explain_labs = st.toggle(
         "Show SHAP explanation",
         value=False,
-        help="Explain the tabular model prediction.",
+        help="Explain the tabular model prediction."
     )
 
     st.divider()
@@ -257,7 +258,7 @@ with lab_col:
 
     use_labs = st.checkbox(
         "Enable tabular prediction",
-        value=False,
+        value=False
     )
 
     if use_labs:
@@ -268,32 +269,33 @@ with lab_col:
                 value = st.text_input(
                     name.replace("_", " ").title(),
                     key=f"lab_{name}",
-                    placeholder="Enter value",
+                    placeholder="Enter value"
                 )
 
                 if value.strip():
                     lab_values[name] = value.strip()
+
 
 with ecg_col:
     st.markdown("""
     <div class="section-card">
         <div class="section-title">02. ECG Image Analysis</div>
         <div class="section-description">
-            Upload a 12-lead ECG image for CAD prediction.
+            Upload a 12-lead ECG image for CAD and arrhythmia analysis.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     ecg_file = st.file_uploader(
         "Upload ECG image",
-        type=["jpg", "jpeg", "png"],
+        type=["jpg", "jpeg", "png"]
     )
 
     if ecg_file:
         st.image(
             ecg_file,
             caption="Uploaded ECG image",
-            use_container_width=True,
+            use_container_width=True
         )
 
 
@@ -303,8 +305,11 @@ with ecg_col:
 
 st.write("")
 
-if st.button("Run Cardiovascular Analysis", type="primary",
-             use_container_width=True):
+if st.button(
+    "Run Cardiovascular Analysis",
+    type="primary",
+    use_container_width=True
+):
 
     selected_labs = (
         lab_values
@@ -345,6 +350,10 @@ if st.button("Run Cardiovascular Analysis", type="primary",
 
             result_lab, result_ecg = st.columns(2, gap="large")
 
+            # --------------------------------------
+            # TABULAR RESULTS
+            # --------------------------------------
+
             with result_lab:
                 st.markdown("""
                 <div class="result-panel">
@@ -369,10 +378,15 @@ if st.button("Run Cardiovascular Analysis", type="primary",
                         st.caption(
                             f"Model decision threshold: {threshold:.1%}"
                         )
+
                 else:
                     st.info("Tabular prediction was not requested.")
 
                 st.markdown("</div>", unsafe_allow_html=True)
+
+            # --------------------------------------
+            # ECG RESULTS
+            # --------------------------------------
 
             with result_ecg:
                 st.markdown("""
@@ -386,11 +400,42 @@ if st.button("Run Cardiovascular Analysis", type="primary",
                 """, unsafe_allow_html=True)
 
                 if result.cad_probability is not None:
+
+                    # CAD probability
                     st.markdown(
                         f'<div class="result-value">'
                         f'{result.cad_probability:.1%}</div>',
                         unsafe_allow_html=True,
                     )
+
+                    st.caption("Calibrated CAD probability")
+
+                    # Arrhythmia probability
+                    if result.arrhythmia_probability is not None:
+
+                        st.divider()
+
+                        st.markdown("**Arrhythmia Probability**")
+
+                        st.metric(
+                            label="ECG arrhythmia score",
+                            value=f"{result.arrhythmia_probability:.1%}",
+                        )
+
+                        st.warning(
+                            "The ECG model has produced a separate "
+                            "arrhythmia probability. This is a "
+                            "research-model estimate, not a clinical "
+                            "diagnosis. Please consult a qualified "
+                            "healthcare professional for interpretation."
+                        )
+
+                    else:
+                        st.info(
+                            "Arrhythmia probability is unavailable "
+                            "for this prediction."
+                        )
+
                 else:
                     st.info("ECG prediction was not requested.")
 
@@ -404,11 +449,16 @@ if st.button("Run Cardiovascular Analysis", type="primary",
             <div class="helper-box">
                 <b>Important distinction:</b><br>
                 The tabular model predicts general heart disease.
-                The ECG model predicts CAD. These are independent
-                model outputs and are not combined into one score.
-                The predictions are intended for research use only.
+                The ECG model provides separate CAD and arrhythmia
+                probabilities. These outputs are not combined into
+                one score. The predictions are intended for research
+                use only and are not a substitute for clinical assessment.
             </div>
             """, unsafe_allow_html=True)
+
+            # --------------------------------------
+            # SHAP EXPLANATION
+            # --------------------------------------
 
             if explain_labs and selected_labs is not None:
                 st.divider()

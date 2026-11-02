@@ -1,3 +1,4 @@
+
 # ---------- Data: never commit patient data ----------
 # Keep only the folder skeleton (.gitkeep), the data README and the data register.
 data/raw/**
@@ -9,6 +10,9 @@ data/interim/**
 data/processed/**
 !data/processed/**/
 !data/processed/**/.gitkeep
+
+# ---------- Generated ECG features ----------
+data/features/*.npz
 
 # ---------- Trained models and experiment outputs ----------
 models/**

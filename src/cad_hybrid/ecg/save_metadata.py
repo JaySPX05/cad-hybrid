@@ -6,7 +6,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 TRAIN_CSV = ROOT / "data" / "processed" / "train.csv"
-OUTPUT = ROOT / "models" / "ecg_metadata.json"
+OUTPUT = ROOT / "reports" / "ecg_metadata.json"
 
 
 def main():

@@ -58,4 +58,4 @@ class_indices:
   "1": negative
   "2": arrhythmia
 
-metadata: models/ecg_metadata.json
+metadata: reports/ecg_metadata.json
