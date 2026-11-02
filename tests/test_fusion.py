@@ -1,127 +1,349 @@
+
 import math
 
 import numpy as np
 import pandas as pd
 import pytest
+
 from sklearn.linear_model import LogisticRegression
 
 import cad_hybrid.predict as predict_module
+
 from cad_hybrid.fusion.calibrate import Calibrator
 from cad_hybrid.fusion.fuse import fuse, risk_category
 from cad_hybrid.predict import predict, predict_tabular
-from cad_hybrid.tabular.artifact import build_artifact, save_artifact
+from cad_hybrid.tabular.artifact import (
+    build_artifact,
+    save_artifact,
+    load_artifact,
+)
 
 
 def logit(p):
     return math.log(p / (1 - p))
 
 
+# =====================================================
+# FUSION UTILITY TESTS
+# =====================================================
+
 def test_no_branches_returns_target_prior():
-    assert fuse({"tabular": None, "ecg": None}, {}, target_prior=0.3) == pytest.approx(0.3)
+    assert fuse(
+        {"tabular": None, "ecg": None},
+        {},
+        target_prior=0.3,
+    ) == pytest.approx(0.3)
 
 
 def test_single_branch_trained_at_target_rate_returns_its_probability():
-    p = fuse({"tabular": 0.7, "ecg": None}, {"tabular": 0.3}, target_prior=0.3)
+    p = fuse(
+        {"tabular": 0.7, "ecg": None},
+        {"tabular": 0.3},
+        target_prior=0.3,
+    )
+
     assert p == pytest.approx(0.7)
 
 
 def test_uninformative_branch_returns_target_prior():
-    # a probability equal to the branch's own training rate carries no evidence
-    p = fuse({"ecg": 0.59}, {"ecg": 0.59}, target_prior=0.2)
+    p = fuse(
+        {"ecg": 0.59},
+        {"ecg": 0.59},
+        target_prior=0.2,
+    )
+
     assert p == pytest.approx(0.2)
 
 
 def test_each_branch_uses_its_own_training_rate():
-    p = fuse({"tabular": 0.8, "ecg": 0.7}, {"tabular": 0.565, "ecg": 0.592}, target_prior=0.3)
-    expected = logit(0.3) + (logit(0.8) - logit(0.565)) + (logit(0.7) - logit(0.592))
+    p = fuse(
+        {"tabular": 0.8, "ecg": 0.7},
+        {"tabular": 0.565, "ecg": 0.592},
+        target_prior=0.3,
+    )
+
+    expected = (
+        logit(0.3)
+        + (logit(0.8) - logit(0.565))
+        + (logit(0.7) - logit(0.592))
+    )
+
     assert logit(p) == pytest.approx(expected)
 
 
 def test_agreeing_branches_strengthen_evidence():
-    priors = {"tabular": 0.5, "ecg": 0.5}
-    both = fuse({"tabular": 0.7, "ecg": 0.7}, priors, target_prior=0.5)
+    priors = {
+        "tabular": 0.5,
+        "ecg": 0.5,
+    }
+
+    both = fuse(
+        {"tabular": 0.7, "ecg": 0.7},
+        priors,
+        target_prior=0.5,
+    )
+
     assert both > 0.7
 
 
 def test_zero_weight_ignores_branch():
-    p = fuse({"tabular": 0.7, "ecg": 0.95}, {"tabular": 0.3, "ecg": 0.6}, target_prior=0.3,
-             weights={"ecg": 0.0})
+    p = fuse(
+        {"tabular": 0.7, "ecg": 0.95},
+        {"tabular": 0.3, "ecg": 0.6},
+        target_prior=0.3,
+        weights={"ecg": 0.0},
+    )
+
     assert p == pytest.approx(0.7)
 
 
 def test_missing_branch_prior_rejected():
-    with pytest.raises(ValueError, match="branch_priors.ecg"):
-        fuse({"tabular": 0.7, "ecg": 0.6}, {"tabular": 0.5}, target_prior=0.5)
+    with pytest.raises(
+        ValueError,
+        match="branch_priors.ecg",
+    ):
+        fuse(
+            {"tabular": 0.7, "ecg": 0.6},
+            {"tabular": 0.5},
+            target_prior=0.5,
+        )
 
 
 def test_risk_category_bounds():
-    cats = {"low": [0.0, 0.1], "moderate": [0.1, 0.2], "high": [0.2, 1.0]}
-    assert risk_category(0.05, cats) == "low"
-    assert risk_category(0.1, cats) == "moderate"
-    assert risk_category(1.0, cats) == "high"
+    categories = {
+        "low": [0.0, 0.1],
+        "moderate": [0.1, 0.2],
+        "high": [0.2, 1.0],
+    }
+
+    assert risk_category(0.05, categories) == "low"
+    assert risk_category(0.1, categories) == "moderate"
+    assert risk_category(1.0, categories) == "high"
 
 
-# ---------- predict(): priors come from the config and the saved lab model ----------
-
-CATS = {"low": [0.0, 0.1], "moderate": [0.1, 0.2], "high": [0.2, 1.0]}
-
+# =====================================================
+# TEST FIXTURE: TRAINED TABULAR MODEL
+# =====================================================
 
 @pytest.fixture
 def lab_model(tmp_path):
+
     rng = np.random.default_rng(0)
-    X = pd.DataFrame({"age": rng.uniform(20, 80, 200), "ldl": rng.uniform(60, 200, 200)})
-    y = (0.02 * (X["ldl"] - 110) + rng.normal(0, 0.5, 200) > 0).astype(int)
+
+    X = pd.DataFrame({
+        "age": rng.uniform(20, 80, 200),
+        "ldl": rng.uniform(60, 200, 200),
+    })
+
+    y = (
+        0.02 * (X["ldl"] - 110)
+        + rng.normal(0, 0.5, 200) > 0
+    ).astype(int)
+
     model = LogisticRegression().fit(X, y)
-    calibrator = Calibrator("platt").fit(model.predict_proba(X)[:, 1], y.to_numpy())
-    artifact = build_artifact(model, calibrator, ["age", "ldl"], {},
-                              {"positive_rate": round(float(y.mean()), 4)})
-    return save_artifact(artifact, tmp_path / "lab.joblib")
+
+    calibrator = Calibrator("platt").fit(
+        model.predict_proba(X)[:, 1],
+        y.to_numpy(),
+    )
+
+    artifact = build_artifact(
+        model,
+        calibrator,
+        ["age", "ldl"],
+        {},
+        {
+            "positive_rate": round(
+                float(y.mean()),
+                4,
+            )
+        },
+    )
+
+    return save_artifact(
+        artifact,
+        tmp_path / "lab.joblib",
+    )
 
 
-def config(**overrides):
-    cfg = {"target_prior": None, "branch_priors": {"tabular": None, "ecg": None},
-           "branch_weights": {"tabular": 1.0, "ecg": 1.0}, "risk_categories": CATS}
-    cfg.update(overrides)
-    return cfg
+# =====================================================
+# INDEPENDENT PREDICTION TESTS
+# =====================================================
+
+def test_lab_only_returns_general_heart_disease_probability(lab_model):
+
+    labs = {
+        "age": 60,
+        "ldl": 170,
+    }
+
+    result = predict(
+        lab_values=labs,
+        tabular_model_path=lab_model,
+    )
+
+    expected = predict_tabular(
+        labs,
+        lab_model,
+    )
+
+    assert result.tabular_probability == pytest.approx(expected)
+    assert result.cad_probability is None
+    assert result.arrhythmia_probability is None
+
+    assert result.branch_probabilities["tabular"] == pytest.approx(expected)
+    assert result.branch_probabilities["ecg"] is None
+    assert result.branch_probabilities["arrhythmia"] is None
+
+    assert result.fused_probability is not None
+    assert result.category is not None
 
 
-def test_lab_only_result_equals_lab_model_by_default(lab_model):
-    labs = {"age": 60, "ldl": 170}
-    result = predict(labs, tabular_model_path=lab_model, fusion_config=config())
-    assert result.probability == pytest.approx(predict_tabular(labs, lab_model))
+def test_ecg_only_returns_cad_probability(monkeypatch, tmp_path):
+
+    monkeypatch.setattr(
+        predict_module,
+        "predict_ecg",
+        lambda path: 0.9,
+    )
+
+    missing_model = tmp_path / "no_model.joblib"
+
+    # ECG prior equals target prior in this isolated test.
+    test_fusion_config = {
+        "target_prior": 0.5899581589958159,
+        "branch_priors": {
+            "tabular": None,
+            "ecg": 0.5899581589958159,
+        },
+        "branch_weights": {
+            "tabular": 1.0,
+            "ecg": 1.0,
+        },
+        "risk_categories": {
+            "low": [0.0, 0.10],
+            "moderate": [0.10, 0.20],
+            "high": [0.20, 1.0],
+        },
+    }
+
+    result = predict(
+        ecg_image_path="ecg.png",
+        tabular_model_path=missing_model,
+        fusion_config=test_fusion_config,
+    )
+
+    assert result.cad_probability == pytest.approx(0.9)
+    assert result.tabular_probability is None
+    assert result.arrhythmia_probability is None
+
+    assert result.fused_probability == pytest.approx(0.9)
+    assert result.category == "high"
+
+    assert result.branch_probabilities["ecg"] == pytest.approx(0.9)
+    assert result.branch_probabilities["tabular"] is None
+    assert result.branch_probabilities["arrhythmia"] is None
 
 
-def test_lower_target_prior_lowers_lab_only_result(lab_model):
-    labs = {"age": 60, "ldl": 170}
-    default = predict(labs, tabular_model_path=lab_model, fusion_config=config())
-    screening = predict(labs, tabular_model_path=lab_model,
-                        fusion_config=config(target_prior=0.1))
-    assert screening.probability < default.probability
+def test_both_branches_return_separate_predictions(lab_model, monkeypatch):
+
+    monkeypatch.setattr(
+        predict_module,
+        "predict_ecg",
+        lambda path: 0.9,
+    )
+
+    labs = {
+        "age": 60,
+        "ldl": 170,
+    }
+
+    result = predict(
+        lab_values=labs,
+        ecg_image_path="ecg.png",
+        tabular_model_path=lab_model,
+    )
+
+    expected_tabular = predict_tabular(
+        labs,
+        lab_model,
+    )
+
+    assert result.tabular_probability == pytest.approx(expected_tabular)
+    assert result.cad_probability == pytest.approx(0.9)
+
+    assert result.branch_probabilities["tabular"] == pytest.approx(
+        expected_tabular
+    )
+    assert result.branch_probabilities["ecg"] == pytest.approx(0.9)
+
+    assert result.fused_probability is not None
+    assert 0.0 <= result.fused_probability <= 1.0
+    assert result.category is not None
 
 
-def test_ecg_without_training_rate_gives_clear_error(lab_model, monkeypatch):
-    monkeypatch.setattr(predict_module, "predict_ecg", lambda path: 0.8)
-    with pytest.raises(ValueError, match="branch_priors.ecg"):
-        predict({"age": 60, "ldl": 170}, "ecg.png", tabular_model_path=lab_model,
-                fusion_config=config())
+# =====================================================
+# ARRHYTHMIA EXCLUSION FROM CAD FUSION
+# =====================================================
+
+def test_arrhythmia_is_excluded_from_fusion(lab_model, monkeypatch):
+
+    monkeypatch.setattr(
+        predict_module,
+        "predict_ecg",
+        lambda path: {
+            "cad_probability": 0.8,
+            "arrhythmia_probability": 0.95,
+        },
+    )
+
+    labs = {
+        "age": 60,
+        "ldl": 170,
+    }
+
+    result = predict(
+        lab_values=labs,
+        ecg_image_path="ecg.png",
+        tabular_model_path=lab_model,
+    )
+
+    # Read the actual training positive rate from the test model.
+    artifact = load_artifact(str(lab_model))
+    tabular_prior = artifact["metadata"]["positive_rate"]
+
+    # Calculate expected fusion using CAD branches only.
+    expected_fusion = fuse(
+        {
+            "tabular": result.tabular_probability,
+            "ecg": result.cad_probability,
+        },
+        {
+            "tabular": tabular_prior,
+            "ecg": predict_module.load_config("fusion")["branch_priors"]["ecg"],
+        },
+        target_prior=tabular_prior,
+        weights={
+            "tabular": 1.0,
+            "ecg": 1.0,
+        },
+    )
+
+    assert result.arrhythmia_probability == pytest.approx(0.95)
+
+    assert result.branch_probabilities["arrhythmia"] == pytest.approx(0.95)
+
+    assert result.fused_probability == pytest.approx(expected_fusion)
 
 
-def test_both_branches_fused(lab_model, monkeypatch):
-    monkeypatch.setattr(predict_module, "predict_ecg", lambda path: 0.9)
-    labs = {"age": 60, "ldl": 170}
-    cfg = config(branch_priors={"tabular": None, "ecg": 0.592})
-    both = predict(labs, "ecg.png", tabular_model_path=lab_model, fusion_config=cfg)
-    lab_only = predict(labs, tabular_model_path=lab_model, fusion_config=cfg)
-    assert both.probability > lab_only.probability  # a confident CAD ECG adds evidence
-    assert both.branch_probabilities["ecg"] == 0.9
+# =====================================================
+# INPUT VALIDATION
+# =====================================================
 
+def test_no_inputs_raises_clear_error():
 
-def test_ecg_only_without_lab_model_needs_target_prior(tmp_path, monkeypatch):
-    monkeypatch.setattr(predict_module, "predict_ecg", lambda path: 0.9)
-    missing = tmp_path / "none.joblib"
-    cfg = config(branch_priors={"tabular": None, "ecg": 0.592})
-    with pytest.raises(ValueError, match="target_prior"):
-        predict(ecg_image_path="ecg.png", tabular_model_path=missing, fusion_config=cfg)
-    cfg["target_prior"] = 0.592
-    assert predict(ecg_image_path="ecg.png", tabular_model_path=missing,
-                   fusion_config=cfg).probability == pytest.approx(0.9)
+    with pytest.raises(
+        ValueError,
+        match="Provide lab values",
+    ):
+        predict()

@@ -1,0 +1,24 @@
+ECG SPLIT VERIFICATION REPORT
+=============================================
+Total images: 928
+Unique paths: 928
+
+Split sizes:
+train: 638 (expected 638)
+validation: 158 (expected 158)
+test: 132 (expected 132)
+
+Duplicate-group overlaps:
+train_vs_validation: 0
+train_vs_test: 0
+validation_vs_test: 0
+Total overlapping groups: 0
+
+Unique groups per class:
+label       arrhythmia  cad_positive  negative
+split                                         
+test                33            15        20
+train              160            81        98
+validation          40            20        24
+
+Duplicate-group leakage check: PASSED

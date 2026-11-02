@@ -9,12 +9,15 @@
 # lab decision threshold still applies.
 target_prior: null
 
-# Each branch's training positive rate: what its probabilities were calibrated on.
-# null for tabular = read it from the saved lab model. The ECG branch must set it once
-# its model exists (CAD / (CAD + normal) among training ECGs).
+# Each branch's positive rate: what its probabilities were calibrated on.
+# tabular: null = read it from the saved lab model.
+# ecg: CAD rate of the ECG calibration (validation) set, one ECG per duplicate group
+#      (20 CAD / 44). Counting images instead would give 0.59, because the dataset holds
+#      many copies of the same ECG. Regenerate with python -m cad_hybrid.ecg.save_metadata
+#      (reports/ecg_metadata.json, fusion_prior) after recalibrating.
 branch_priors:
   tabular: null
-  ecg: null
+  ecg: 0.4545
 
 # 1.0 each = naive-Bayes assumption (independent evidence given disease status).
 # Can't be learned or checked until there are patients with both labs and an ECG.
