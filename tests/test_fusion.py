@@ -320,7 +320,7 @@ def test_arrhythmia_is_excluded_from_fusion(lab_model, monkeypatch):
         },
         {
             "tabular": tabular_prior,
-            "ecg": 0.5899581589958159,
+            "ecg": predict_module.load_config("fusion")["branch_priors"]["ecg"],
         },
         target_prior=tabular_prior,
         weights={
