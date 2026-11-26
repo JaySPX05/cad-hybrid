@@ -5,6 +5,7 @@ import joblib
 import torch
 
 from .feature_extractor import create_feature_extractor
+from .image_check import REFERENCE_PATH, check, load_reference
 from .preprocess import preprocess_image
 from .scoring import ARRHYTHMIA, apply_binary_calibrator, cad_vs_normal_score
 
@@ -18,6 +19,7 @@ BUNDLE_PATH = ROOT / "models" / "ecg_calibration_bundle.pkl"
 _feature_model = None
 _svm_model = None
 _calibration_bundle = None
+_image_reference = None
 
 
 def _load():
@@ -64,6 +66,17 @@ def predict_ecg(image_path):
 
     features = features.detach().cpu().numpy().reshape(1, -1)
 
+    # Does the image look like the training ECGs? (None if the check isn't built.)
+    global _image_reference
+    if _image_reference is None:
+        _image_reference = load_reference(REFERENCE_PATH) or {}
+    if _image_reference:
+        looks_like_ecg, image_distance = check(_image_reference, features)
+        image_check = {"passed": looks_like_ecg, "distance": image_distance,
+                       "threshold": _image_reference["threshold"]}
+    else:
+        image_check = None
+
     # Get decision scores from the original trained SVM.
     decision_scores = svm_model.decision_function(features)
 
@@ -81,5 +94,6 @@ def predict_ecg(image_path):
 
     return {
         "cad_probability": calibrated_cad,
-        "arrhythmia_probability": p_arrhythmia
+        "arrhythmia_probability": p_arrhythmia,
+        "image_check": image_check,
     }

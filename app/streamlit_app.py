@@ -6,6 +6,8 @@ The ECG branch predicts CAD and arrhythmia probabilities.
 Both predictions are displayed independently.
 """
 
+import hmac
+import os
 import tempfile
 from pathlib import Path
 
@@ -28,6 +30,38 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# --------------------------------------------------
+# ACCESS
+# Set CAD_APP_PASSWORD (environment) or app_password (.streamlit/secrets.toml) before
+# running the app anywhere other people can reach it. .streamlit/config.toml binds the
+# app to this computer by default.
+# --------------------------------------------------
+
+
+def app_password():
+    password = os.environ.get("CAD_APP_PASSWORD")
+    if not password:
+        try:
+            password = st.secrets.get("app_password")
+        except Exception:  # no secrets file
+            password = None
+    return password or None
+
+
+_password = app_password()
+if _password and not st.session_state.get("signed_in"):
+    with st.form("sign_in"):
+        entered = st.text_input("Password", type="password")
+        if st.form_submit_button("Sign in"):
+            if hmac.compare_digest(entered.encode(), _password.encode()):
+                st.session_state["signed_in"] = True
+                st.rerun()
+            st.error("Wrong password.")
+    st.stop()
+if not _password:
+    st.sidebar.warning("No password set (CAD_APP_PASSWORD), so keep this app on your own "
+                       "computer.")
 
 # --------------------------------------------------
 # PROFESSIONAL UI STYLING
