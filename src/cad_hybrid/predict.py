@@ -85,11 +85,22 @@ def predict_ecg(image_path: str) -> dict[str, float]:
 
     result = predict_ecg_details(image_path)
 
+    # Refuse pictures that don't look like the training ECGs (see ecg/image_check.py);
+    # None means the check hasn't been built (scripts/build_ecg_image_check.py).
+    image_check = result.get("image_check")
+    if image_check is not None and not image_check["passed"]:
+        raise ValueError(
+            "the image doesn't look like the 12-lead ECGs the model was trained on "
+            f"(distance {image_check['distance']:.3f}, limit {image_check['threshold']:.3f}); "
+            "upload a clear photo or scan of a 12-lead ECG"
+        )
+
     return {
         "cad_probability": float(result["cad_probability"]),
         "arrhythmia_probability": float(
             result["arrhythmia_probability"]
         ),
+        "image_check": image_check,
     }
 
 

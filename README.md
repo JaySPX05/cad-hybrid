@@ -61,6 +61,8 @@ Then download the datasets into `data/raw/` as described in `data/README.md`.
 python scripts/train_tabular.py --config configs/tabular.yaml
 python scripts/choose_threshold.py          # re-choose the lab threshold, no retraining
 python scripts/explain_tabular.py           # SHAP report for the saved lab model
+python scripts/build_ecg_image_check.py     # reject uploads that don't look like ECGs (after ECG training)
+python scripts/check_regression.py          # committed results vs baselines (also runs in CI)
 python scripts/train_ecg.py --config configs/ecg.yaml
 python scripts/evaluate.py
 streamlit run app/streamlit_app.py
@@ -84,3 +86,10 @@ streamlit run app/streamlit_app.py
 | ECG branch | In progress (teammate) |
 | Fusion | Per-branch training rates and target prior in place; weights (1.0) and risk categories are unvalidated placeholders until paired lab + ECG data exists |
 | Streamlit test app | Works with lab values, incl. per-patient SHAP; ECG pending |
+
+## Safety checks
+
+- **Unknown inputs:** lab values outside plausible ranges count as missing, and patients with more than 4 of 19 blank are refused. ECG uploads that don't look like the training ECGs are refused once `scripts/build_ecg_image_check.py` has been run.
+- **Updates:** CI runs the tests and `scripts/check_regression.py` on every pull request: committed results must stay within `configs/regression_baseline.yaml`.
+- **Access:** set `CAD_APP_PASSWORD` to require a password; the app only listens on this computer by default (`.streamlit/config.toml`).
+- **Data:** data and model files are never committed. The lab model file contains training rows (TabICL), so it stays within the team.

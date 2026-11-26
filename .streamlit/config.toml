@@ -1,0 +1,4 @@
+# Only this computer can open the app. To let others reach it, set a password first
+# (CAD_APP_PASSWORD or app_password in .streamlit/secrets.toml), then change the address.
+[server]
+address = "localhost"

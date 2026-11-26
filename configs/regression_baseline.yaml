@@ -1,0 +1,42 @@
+# Reference results each agent's model must keep after it is retrained or replaced.
+# Checked by scripts/check_regression.py, in CI on every pull request: a PR that commits
+# a worse result report fails. The reports are written by the training/evaluation scripts.
+#
+# To change a baseline (e.g. a deliberately different model, or new data), edit it in its
+# own reviewed pull request and give the reason in the PR. Never lower it to make CI pass.
+#
+# Per check: report file, where the value is, the baseline, which direction is better,
+# and how much worse is still allowed (sized to each test set's uncertainty).
+
+checks:
+  - agent: lab
+    name: cross-validated AUROC (stack)
+    report: reports/baseline_results_tabular.csv
+    csv: {model: stack_xgb_tabicl, metric: auroc, column: value}
+    baseline: 0.991
+    better: higher
+    allowed_change: 0.01
+
+  - agent: lab
+    name: cross-validated Brier score (stack)
+    report: reports/baseline_results_tabular.csv
+    csv: {model: stack_xgb_tabicl, metric: brier, column: value}
+    baseline: 0.027
+    better: lower
+    allowed_change: 0.01
+
+  - agent: ecg
+    name: test AUROC (CAD vs normal, 35 ECGs)
+    report: reports/ecg_test_results.json
+    json: metrics.auroc
+    baseline: 0.977
+    better: higher
+    allowed_change: 0.03
+
+  - agent: ecg
+    name: test Brier score
+    report: reports/ecg_test_results.json
+    json: metrics.brier_score
+    baseline: 0.046
+    better: lower
+    allowed_change: 0.03
